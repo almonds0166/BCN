@@ -9,3 +9,12 @@ Have some visual or video, maybe even interactive, that viewers can view.
 ## Running locally
 
 Follow [these instructions](https://pytorch.org/get-started/locally/) to install PyTorch locally; then install the requirements in `requirements.txt`.
+
+## TODO
+
+* Check transpose
+* Fix fully-connected
+* Track accuracy, precision, recall, F1 score
+* Implement training modules (and evaluation modules) into class
+* Resize (scale) datasets
+* Pad datasets
