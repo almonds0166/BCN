@@ -251,7 +251,7 @@ class BCNLayer(nn.Module):
       self.weights = {}
       for dx in self.ells:
          for dy in self.ells:
-            self.weights[dy,dx] = nn.Parameter(torch.Tensor(self.hw,1)).to(device)
+            self.weights[dy,dx] = nn.Parameter(torch.Tensor(self.hw,1).to(device))
             nn.init.normal_(self.weights[dy,dx], mean=mean, std=std)
             self.register_parameter(f"({dy},{dx})", self.weights[dy,dx])
       # dropout
@@ -302,6 +302,10 @@ class BCNLayer(nn.Module):
       
       return y
 
+class BCNDataset(Enum):
+   MNIST = "MNIST"
+   FASHION = "Fashion-MNIST"
+
 class BCN(nn.Module):
    """Branched connection network.
 
@@ -317,13 +321,15 @@ class BCN(nn.Module):
       dropout: The proportion of dropout to use for each layer.
       mean: The mean of the normal distribution to initialize weights, default 0.0.
       std: The standard deviation of the normal distribution to initialize weights, default 0.5.
+      verbose: Verbosity level. 0 (default) is less text, 1 is medium, 2 is most verbose.
+      tqdm: The tqdm wrapper to use (use tqdm.notebook.tqdm if in a notebook).
 
    Attributes:
       Todo.
    """
    def __init__(self, width: int, depth: int, connections: int,
       branches=DirectOnly(), device=DEV, dropout: float=0.1,
-      mean: float=0.0, std: float=0.5,
+      mean: float=0.0, std: float=0.5, verbose: int=0, tqdm=tqdm,
       *args, **kwargs):
       if depth < 1: raise ValueError(f"Depth must be at least 1; given: {depth}.")
       assert connections == float("inf") \
@@ -333,6 +339,7 @@ class BCN(nn.Module):
             f"(namely 9, 25, 49, ..., inf); given {connections}."
          )
       super().__init__(*args, **kwargs)
+      if verbose: print("Building BCN model...")
       # remember args
       self.height = width
       self.width = width
@@ -341,6 +348,8 @@ class BCN(nn.Module):
       self.connections = connections
       self.branches = branches
       self.device = device
+      self.verbose = verbose
+      self.tqdm = tqdm
       # define layers
       self.layers = nn.ModuleList()
       for d in range(depth):
@@ -374,102 +383,154 @@ class BCN(nn.Module):
 
       return y
 
-class BCNDataset(Enum):
-   MNIST = "MNIST"
-   FASHION = "Fashion-MNIST"
+   def prepare_dataset(self, dataset=BCNDataset.MNIST, batch_size: int=32, root: str="./data/",
+      width: int=28, padding: int=0, fill: int=0):
+      """Prepare training and validation sets of MNIST or Fashion-MNIST.
+      
+      Args:
+         dataset (BCNDataset): The dataset to use, MNIST or FASHION.
+         batch_size: The number of cookies in one batch, obviously; default 32.
+         root: The directory to download the dataset to, if not already there; default "./data/".
+         width: The desired final height and width of the dataset images; default 28. Note that the
+            images are vectorized, so a width of 28 ultimately corresponds to a batch of size of
+            (batch_size, 784) instead of (batch_size, 28, 28).
+         padding: The number of rings of the padding value to add around the outside of each
+            dataset image. Default value is 0, to add no padding. Note: Padding is added after the
+            resizing transformation such that the final image size is ``(width, width)``.
+         fill: The value to pad with, if padding; default 0.
 
-def prepare_dataset(dataset=BCNDataset.MNIST, batch_size: int=32, root: str="./data/"):
-   """Prepare training and validation sets of MNIST or Fashion-MNIST.
-   
-   Args:
-      dataset (BCNDataset): The dataset to use, MNIST or FASHION.
-      batch_size: The number of cookies in one batch, obviously; default 32.
-      root: The directory to download the dataset to, if not already there; default "./data/".
+      Returns:
+         train_set: DataLoader of the training set, each batch is shape (batch_size, width*width).
+         valid_set: DataLoader of the validation set.
+      """
 
-   Returns:
-      train: DataLoader of the training set.
-      valid: DataLoader of the validation set.
-   """
+      assert dataset in (BCNDataset.MNIST, BCNDataset.FASHION), \
+         "Given dataset must be MNIST or Fashion-MNIST."
 
-   assert dataset in (BCNDataset.MNIST, BCNDataset.FASHION), \
-      "Given dataset must be MNIST or Fashion-MNIST."
+      if dataset == BCNDataset.MNIST:
+         dset = torchvision.datasets.MNIST
+      elif dataset == BCNDataset.FASHION:
+         dset = torchvision.datasets.FashionMNIST
 
-   if dataset == BCNDataset.MNIST:
-      dset = torchvision.datasets.MNIST
-   elif dataset == BCNDataset.FASHION:
-      dset = torchvision.datasets.FashionMNIST
+      # transformations
+      tr = torchvision.transforms.Compose([
+         torchvision.transforms.ToTensor(),
+         torchvision.transforms.Resize((width-2*padding)),
+         torchvision.transforms.Pad(padding, fill=fill),
+         lambda image: torch.reshape(image, (image.size().numel(),)) # vectorize!
+      ])
 
-   # https://pytorch.org/vision/stable/transforms.html
-   # look into torchvision.transforms.Resize
-   # look into torchvision.transforms.Pad
-   tr = torchvision.transforms.Compose([
-      torchvision.transforms.ToTensor()
-   ])
+      train_set = DataLoader(
+         dset(root, download=True, train=True, transform=tr), 
+         batch_size=batch_size,
+         drop_last=True,
+         shuffle=True,
+         pin_memory=torch.cuda.is_available()
+      )
+      valid_set = DataLoader(
+         dset(root, download=True, train=False, transform=tr), 
+         batch_size=batch_size,
+         drop_last=True,
+         shuffle=True,
+         pin_memory=torch.cuda.is_available()
+      )
 
-   train = DataLoader(
-      dset(root, download=True, train=True, transform=tr), 
-      batch_size=batch_size,
-      drop_last=True,
-      shuffle=True
-   )
-   valid = DataLoader(
-      dset(root, download=True, train=False, transform=tr), 
-      batch_size=batch_size,
-      drop_last=True,
-      shuffle=True
-   )
+      self.train_set = train_set
+      self.valid_set = valid_set
 
-   return train, valid
+      return train_set, valid_set
+
+   def train(self, mode: bool=True, optim=None,
+      dataset=BCNDataset.MNIST, batch_size: int=32, root: str="./data/",
+      width: int=28, padding: int=0, fill: int=0):
+      """Prepare the model to begin training.
+
+      Args:
+         mode: If 
+
+      Todo:
+         Finish this documentation...
+      """
+      if self.verbose: print("Setting up for training...")
+
+      if optim is None: optim = torch.optim.AdamW(model.parameters(), lr=0.001)
+
+      if mode:
+         super().train()
+         self.train_losses = []
+         self.valid_losses = []
+         self.loss_fn = nn.CrossEntropyLoss()
+         self.optim = optim
+         self.epoch = 0
+      else:
+         super().eval()
+
+      if self.verbose: print(f"Fetching {dataset.value} dataset...")
+      self.prepare_dataset(dataset, batch_size, root, width, padding, fill)
+
+   def run_epoch(self):
+      """Train for one epoch.
+      """
+      flag = not self.training
+      try:
+         self.loss_fn
+      except NameError:
+         flag = True
+      if flag:
+         raise RuntimeError("Please explicitly set model to training mode with .train() method.")
+
+      # train
+      train_loss = 0
+      pbar = self.tqdm(self.train_set, desc=f"Epoch {self.epoch}", unit="b")
+      for i, (batch, labels) in enumerate(pbar):
+         # model expects batch_size as last dimension
+         batch = torch.transpose(batch, 0, 1)
+         self.optim.zero_grad()
+         predictions = model.forward(batch)
+         loss = self.loss_fn(predictions, labels)
+         train_loss += loss.detach()
+         pbar.set_postfix(loss=f"{loss.detach():.2f}")
+         loss.backward()
+         self.optim.step()
+      train_loss /= len(self.train_set)
+      self.train_losses.append(train_loss)
+      if self.verbose:
+         print(f"train_loss: {train_loss} (average)")
+
+      # validation
+      valid_loss = 0
+      with torch.no_grad():
+         for i, (batch, labels) in enumerate(self.valid_set):
+            # model expects batch_size as last dimension
+            batch = torch.transpose(batch, 0, 1)
+            predictions = model.forward(batch)
+            loss = self.loss_fn(predictions, labels)
+            valid_loss += loss.detach()
+      valid_loss /= len(self.valid_set)
+      self.valid_losses.append(valid_loss)
+      if self.verbose:
+         print(f"valid_loss: {valid_loss} (average)")
+
+      self.epoch += 1
+
+   def run_epochs(self, n: int):
+      """Train for n epochs.
+
+      Args:
+         n: The number of epochs to train for.
+      """
+      for e in range(n):
+         self.run_epoch()
 
 if __name__ == "__main__":
    torch.manual_seed(23)
    num_epochs = 5
-   batch_size = 32
-   learning_rate=0.001
-   print("Constructing BCN model...")
-   model = BCN(28, 2, 9, dropout=0)
-   print("Setting up for training...")
-   loss_fn = nn.CrossEntropyLoss()
-   optim   = torch.optim.Adam(model.parameters(), lr=learning_rate)
-   train, valid = prepare_dataset(batch_size=batch_size)
-   print(f"Number of training batches: {len(train)}")
-   print(f"Number of validation batches: {len(valid)}")
-   train_losses = []
-   valid_losses = []
-   for e in range(num_epochs):
-      # train
-      train_loss = 0
-      pbar = tqdm(train, desc=f"Epoch {e}", unit="b")
-      for i, (batch, labels) in enumerate(pbar):
-         # transfer to GPU if possible
-         batch, labels = batch.to(DEV), labels.to(DEV)
-         # vectorize images
-         batch = torch.transpose(batch.squeeze().reshape((batch_size,28**2)), 0, 1)
-         optim.zero_grad()
-         predictions = model.forward(batch)
-         loss = loss_fn(predictions, labels)
-         pbar.set_postfix(loss=f"{loss.item():.2f}")
-         train_loss += loss.item()
-         loss.backward()
-         optim.step()
-      train_loss /= len(train)
-      train_losses.append(train_loss)
-      print(f"train_loss: {train_loss} (average)")
-
-      # validation
-      valid_loss = 0
-      #pbar = tqdm(valid, desc=f"Epoch {e}", unit="b")
-      with torch.no_grad():
-         for i, (batch, labels) in enumerate(valid):
-            # transfer to GPU if possible
-            batch, labels = batch.to(DEV), labels.to(DEV)
-            # vectorize images
-            batch = torch.transpose(batch.squeeze().reshape((batch_size,28**2)), 0, 1)
-            predictions = model.forward(batch)
-            loss = loss_fn(predictions, labels)
-            #pbar.set_postfix(loss=f"{loss.item():.2f}")
-            valid_loss += loss.item()
-      valid_loss /= len(valid)
-      valid_losses.append(valid_loss)
-      print(f"valid_loss: {valid_loss} (average)")
-      
+   # prepare model
+   model = BCN(30, 2, 9, dropout=0.1, verbose=1)
+   # prepare for training
+   model.train(width=30, padding=1, batch_size=64)
+   # train
+   model.run_epochs(num_epochs)
+   # results
+   print(f"train_losses: {model.train_losses}")
+   print(f"valid_losses: {model.valid_losses}")
