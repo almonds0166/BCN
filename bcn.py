@@ -4,6 +4,7 @@ from pathlib import Path
 import math
 import itertools
 from enum import Enum
+import time
 
 import torch
 import torch.nn as nn
@@ -22,15 +23,15 @@ class Branches:
    connection from a previous layer to the following layer. The center of this matrix represents
    the connection from a previous layer's neuron to the single nearest neighbor neuron in the next
    layer. Likewise, off center elements represent connections from a previous layer's neuron to off
-   center nearest neighbor neurons.
+   center nearest neighbor neurons. Class instances act the same as Python dicts.
    
    Args:
-      width: Size of the matrices representing the branches, default 7.
+      width: Size of the matrices representing the branches, default 9.
 
    Attributes:
       center (int): index of the center of the matrices representing the branches.
    """
-   def __init__(self, width: int=7):
+   def __init__(self, width: int=9):
       if width % 2 == 0: raise ValueError(f"Width must be odd; {width} given.")
       if width < 3: raise ValueError(f"Width must be at least 3; {width} given.")
       self.width = width
@@ -268,6 +269,8 @@ class Results:
       precisions (list[float]): List of validation set `precision scores`_ across eopchs.
       recalls (list[float]): List of validation set `recall scores`_ across epochs.
       f1_scores (list[float]): List of validation set `F1 scores`_ across epochs.
+      train_times (list[float]): List of durations, in seconds, each epoch took to train.
+      valid_times (list[float]): List of durations, in seconds, each epoch took to test.
 
    .. _precision scores: https://en.wikipedia.org/wiki/Precision_and_recall
    .. _recall scores: https://en.wikipedia.org/wiki/Precision_and_recall
@@ -281,6 +284,8 @@ class Results:
       self.precisions = []
       self.recalls = []
       self.f1_scores = []
+      self.train_times = []
+      self.valid_times = []
 
    def __repr__(self):
       plural = self.epoch != 1
@@ -512,6 +517,7 @@ class BCN(nn.Module):
          "Before training, please explicitly set this model to training mode with .train(scheme)."
 
       # train
+      stopwatch = time.time()
       train_loss = 0
       pbar = self.tqdm(self.scheme.train, desc=f"Epoch {self.results.epoch}", unit="b")
       for i, (batch, labels) in enumerate(pbar):
@@ -531,7 +537,10 @@ class BCN(nn.Module):
       if self.verbose:
          print(f"train_loss: {train_loss} (average)")
 
+      self.results.train_times.append(time.time() - stopwatch)
+
       # validation loss
+      stopwatch = time.time()
       valid_loss = 0
       correct = 0
       precision = 0
@@ -569,6 +578,8 @@ class BCN(nn.Module):
 
       if self.verbose:
          print(f"valid_loss: {valid_loss} (average)")
+
+      self.results.valid_times.append(time.time() - stopwatch)
 
       # predictions: torch.Size([64, 10])
       # labels: torch.Size([64])
