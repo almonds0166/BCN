@@ -7,8 +7,8 @@ from enum import Enum
 
 import torch
 import torch.nn as nn
-#import torch.nn.functional as F
 import numpy as np
+from sklearn.metrics import precision_recall_fscore_support
 import torchvision
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -283,7 +283,12 @@ class Results:
       self.f1_scores = []
 
    def __repr__(self):
-      return 
+      plural = self.epoch != 1
+      return f"Results({self.epoch} epoch{'s' if plural else ''})"
+
+   def __iter__(self):
+      for (k,v) in self.__dict__.items():
+         yield (k,v)
 
 class BCNLayer(nn.Module):
    """Branched connection network layer.
@@ -513,30 +518,60 @@ class BCN(nn.Module):
          # model expects batch_size as last dimension
          batch = torch.transpose(batch, 0, 1)
          self.optim.zero_grad()
-         predictions = model.forward(batch)
+         predictions = torch.roll(model.forward(batch), -1, 1) # keypad fix, see Section _._._
          loss = self.loss_fn(predictions, labels)
          train_loss += loss.item()
          pbar.set_postfix(loss=f"{loss.item():.2f}")
          loss.backward()
          self.optim.step()
+      # average loss
       train_loss /= len(self.scheme.train)
+      # record training loss
       self.results.train_losses.append(train_loss)
       if self.verbose:
          print(f"train_loss: {train_loss} (average)")
 
       # validation loss
       valid_loss = 0
+      correct = 0
+      precision = 0
+      recall = 0
+      f1_score = 0
       with torch.no_grad():
          for i, (batch, labels) in enumerate(self.scheme.valid):
             # model expects batch_size as last dimension
             batch = torch.transpose(batch, 0, 1)
-            predictions = model.forward(batch)
+            predictions = torch.roll(model.forward(batch), -1, 1)
+            pred = torch.argmax(predictions, dim=1)
+            # loss
             loss = self.loss_fn(predictions, labels)
             valid_loss += loss.item()
-      valid_loss /= len(self.scheme.valid)
+            # accuracy
+            correct += sum(pred == labels)
+            # precision, recall, f1 score
+            p, r, f1, _ = precision_recall_fscore_support(labels, pred, average="micro")
+            precision += p
+            recall += r
+            f1_score += f1
+      # average the metrics
+      N = len(self.scheme.valid)
+      valid_loss = valid_loss / N
+      accuracy   = correct.item() / (N*self.scheme.batch_size)
+      precision  = precision / N
+      recall     = recall / N
+      f1_score   = f1_score / N
+      # record metrics
       self.results.valid_losses.append(valid_loss)
+      self.results.accuracies.append(accuracy)
+      self.results.precisions.append(precision)
+      self.results.recalls.append(recall)
+      self.results.f1_scores.append(f1_score)
+
       if self.verbose:
          print(f"valid_loss: {valid_loss} (average)")
+
+      # predictions: torch.Size([64, 10])
+      # labels: torch.Size([64])
 
       self.results.epoch += 1
 
@@ -551,14 +586,15 @@ class BCN(nn.Module):
 
 if __name__ == "__main__":
    torch.manual_seed(23)
-   num_epochs = 5
+   num_epochs = 3
    # prepare model
-   model = BCN(30, 2, 9, dropout=0.1, verbose=1)
+   model = BCN(30, 3, 9, dropout=0.1, verbose=1)
    # prepare for training
    scheme = TrainingScheme(width=30, padding=1, batch_size=64)
    model.train(scheme)
    # train
    model.run_epochs(num_epochs)
    # results
-   print(f"train_losses: {model.results.train_losses}")
-   print(f"valid_losses: {model.results.valid_losses}")
+   print("Results:")
+   for key, value in model.results:
+      print(f"\t{key}: {value}")
