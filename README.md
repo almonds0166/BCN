@@ -12,11 +12,8 @@ Follow [these instructions](https://pytorch.org/get-started/locally/) to install
 
 ## TODO
 
-* ~~Check transpose~~
-* Fix fully-connected
+* ~~Fix fully-connected~~
 * Track accuracy, precision, recall, F1 score
-* Implement ~~training modules~~ (and evaluation modules) into class
-* ~~Resize (scale) datasets~~
-* ~~Pad datasets~~
-* Make training (and eval) modules more robust
-* Investigate .detach() and .item() difference
+* ~~Implement training modules (and evaluation modules) into class~~
+* ~~Make training (and eval) modules more robust~~
+* ~~Investigate .detach() and .item() difference~~

@@ -176,13 +176,122 @@ class IndirectOnly(Branches):
    def __repr__(self):
       return "IndirectOnly()"
 
+class Dataset(Enum):
+   MNIST = "MNIST"
+   FASHION = "Fashion-MNIST"
+
+class TrainingScheme:
+   """Class representing how a BCN model should be trained, including dataset and hyperparameters.
+
+   Args:
+      optim: The torch optim instance that should be used for training. Default is `Adam with
+         weight decay`_.
+      dataset (Dataset): The dataset to use, MNIST or FASHION.
+      batch_size: The number of cookies in one batch, obviously; default 32.
+      root: The directory to download the dataset to, if not already there; default "./data/".
+      width: The desired final height and width of the dataset images; default 28. Note that the
+         images are vectorized, so a width of 28 ultimately corresponds to a batch of size of
+         (batch_size, 784) instead of (batch_size, 28, 28).
+      padding: The number of rings of the padding value to add around the outside of each dataset
+         image. Default value is 0, to add no padding. Note: Padding is added after the resizing
+         transformation such that the final image size is (width, width).
+      fill: The value to pad with, if padding; default 0.
+      **kwargs: The extra keyword arguments are passed into the optimizer (for e.g. lr, eps, ...).
+
+   Attributes:
+      optim_params: The keyword arguments passed into the optimizer.
+
+   .. _Adam with weight decay: https://www.fast.ai/2018/07/02/adam-weight-decay/
+   """
+   def __init__(self, optim=None, dataset=Dataset.MNIST, batch_size: int=32, root: str="./data/",
+      width: int=28, padding: int=0, fill: int=0, **kwargs):
+
+      assert dataset in (Dataset.MNIST, Dataset.FASHION), \
+         "Given dataset must be MNIST or Fashion-MNIST."
+      
+      self.optim = optim if optim is not None else torch.optim.AdamW
+      self.optim_params = kwargs
+
+      self.dataset = dataset
+      self.batch_size = batch_size
+      self.root = root
+      self.width = width
+      self.padding = padding
+      self.fill = fill
+
+      self.prepare_dataset()
+
+   def prepare_dataset(self):
+      """Prepare the training and validation sets of MNIST or Fashion-MNIST.
+      """
+      if self.dataset == Dataset.MNIST:
+         dset = torchvision.datasets.MNIST
+      elif self.dataset == Dataset.FASHION:
+         dset = torchvision.datasets.FashionMNIST
+
+      # transformations
+      tr = torchvision.transforms.Compose([
+         torchvision.transforms.ToTensor(),
+         torchvision.transforms.Resize((self.width-2*self.padding)),
+         torchvision.transforms.Pad(self.padding, fill=self.fill),
+         lambda image: torch.reshape(image, (image.size().numel(),)) # vectorize!
+      ])
+
+      train = DataLoader(
+         dset(self.root, download=True, train=True, transform=tr), 
+         batch_size=self.batch_size,
+         drop_last=True,
+         shuffle=True,
+         pin_memory=torch.cuda.is_available()
+      )
+      valid = DataLoader(
+         dset(self.root, download=True, train=False, transform=tr), 
+         batch_size=self.batch_size,
+         drop_last=True,
+         shuffle=True,
+         pin_memory=torch.cuda.is_available()
+      )
+
+      self.train = train
+      self.valid = valid
+
+      return train, valid
+
+class Results:
+   """Class representing BCN training results.
+
+   Attributes:
+      epoch (int): The number of epochs the BCN model has been trained for.
+      train_losses (list[float]): List of average training set losses acorss epochs.
+      valid_losses (list[float]): List of average validation set losses across epochs.
+      accuracies (list[float]): List of validation set accuracies across epochs.
+      precisions (list[float]): List of validation set `precision scores`_ across eopchs.
+      recalls (list[float]): List of validation set `recall scores`_ across epochs.
+      f1_scores (list[float]): List of validation set `F1 scores`_ across epochs.
+
+   .. _precision scores: https://en.wikipedia.org/wiki/Precision_and_recall
+   .. _recall scores: https://en.wikipedia.org/wiki/Precision_and_recall
+   .. _F1 scores: https://en.wikipedia.org/wiki/F-score
+   """
+   def __init__(self):
+      self.epoch = 0
+      self.train_losses = []
+      self.valid_losses = []
+      self.accuracies = []
+      self.precisions = []
+      self.recalls = []
+      self.f1_scores = []
+
+   def __repr__(self):
+      return 
+
 class BCNLayer(nn.Module):
    """Branched connection network layer.
 
    Args:
       width: The side length of the layer.
       connections: The number of direct connections each neuron makes; 9, 25, 49, etc. Use
-         ``float("inf")`` for a fully-connected network.
+         ``None`` for a fully-connected network.
       branches (Branches): The type of indirect (branching) connections used to construct the
          branching network.
       device: The ``torch.device`` object on which the tensors will be allocated. Default is GPU if
@@ -197,15 +306,15 @@ class BCNLayer(nn.Module):
    Attributes:
       Todo.
    """
-   def __init__(self, width: int, connections: int, branches=DirectOnly(),
+   def __init__(self, width: int, connections: int=None, branches=DirectOnly(),
       device=DEV, dropout=0.1, mean=0.0, std=0.5, last: bool=False,
       *args, **kwargs):
       super().__init__(*args, **kwargs)
-      assert connections == float("inf") \
-         or math.isqrt(connections)**2 == connections, \
+      assert connections is None \
+         or int(math.sqrt(connections))**2 == connections, \
          (
             f"The number of connections is expected to be a perfect square "
-            f"(namely 9, 25, 49, ..., float(\"inf\")); given {connections}."
+            f"(namely 9, 25, 49, ...) of None; given {connections}."
          )
       # remember args
       self.height = width
@@ -213,10 +322,8 @@ class BCNLayer(nn.Module):
       self.hw = self.height*self.width
       self.connections = connections
       self.branches = branches
-      ell = (math.isqrt(connections)-1)//2
-      self.ells = range(-ell, ell+1) # <-- This doesn't suppert fully connected just yet! K/=;
-                                     # idea to fix: make ell take the min of ell and the radius of
-                                     # branches matrices
+      ell = (branches.width-1)//2 if connections is None else (int(math.sqrt(connections))-1)//2
+      self.ells = range(-ell, ell+1)
       self.device = device
       self.last = last
       # construct connection matrices
@@ -302,10 +409,6 @@ class BCNLayer(nn.Module):
       
       return y
 
-class BCNDataset(Enum):
-   MNIST = "MNIST"
-   FASHION = "Fashion-MNIST"
-
 class BCN(nn.Module):
    """Branched connection network.
 
@@ -313,7 +416,7 @@ class BCN(nn.Module):
       width: The side length of each layer.
       depth: The depth of the network, equal to the number of nonlinear activations.
       connections: The number of direct connections each neuron makes; 9, 25, 49, etc. Use
-         ``float("inf")`` for a fully-connected network.
+         ``None`` for a fully-connected network.
       branches (Branches): The type of indirect (branching) connections used to construct the
          branching networks for each layer.
       device: The ``torch.device`` object on which the tensors will be allocated. Default is GPU if
@@ -332,14 +435,13 @@ class BCN(nn.Module):
       mean: float=0.0, std: float=0.5, verbose: int=0, tqdm=tqdm,
       *args, **kwargs):
       if depth < 1: raise ValueError(f"Depth must be at least 1; given: {depth}.")
-      assert connections == float("inf") \
-         or math.isqrt(connections)**2 == connections, \
+      assert connections is None \
+         or int(math.sqrt(connections))**2 == connections, \
          (
             f"The number of connections is expected to be a perfect square "
-            f"(namely 9, 25, 49, ..., inf); given {connections}."
+            f"(namely 9, 25, 49, ...) or None; given {connections}."
          )
       super().__init__(*args, **kwargs)
-      if verbose: print("Building BCN model...")
       # remember args
       self.height = width
       self.width = width
@@ -347,9 +449,13 @@ class BCN(nn.Module):
       self.depth = depth
       self.connections = connections
       self.branches = branches
+      if verbose: print(f"Building BCN model {self.__repr__()}...")
       self.device = device
       self.verbose = verbose
       self.tqdm = tqdm
+      # set up training scheme and results attributes
+      self.scheme = None
+      self.results = Results()
       # define layers
       self.layers = nn.ModuleList()
       for d in range(depth):
@@ -372,10 +478,10 @@ class BCN(nn.Module):
       """Forward method of this torch module.
 
       Args:
-         x: The input tensor of size ``(features, batch_size)``.
+         x: The input tensor of size (features, batch_size).
 
       Returns:
-         y: The output tensor of size ``(10, batch_size)``.
+         y: The output tensor of size (10, batch_size).
       """
       y = x
       for d in range(self.depth):
@@ -383,135 +489,56 @@ class BCN(nn.Module):
 
       return y
 
-   def prepare_dataset(self, dataset=BCNDataset.MNIST, batch_size: int=32, root: str="./data/",
-      width: int=28, padding: int=0, fill: int=0):
-      """Prepare training and validation sets of MNIST or Fashion-MNIST.
-      
-      Args:
-         dataset (BCNDataset): The dataset to use, MNIST or FASHION.
-         batch_size: The number of cookies in one batch, obviously; default 32.
-         root: The directory to download the dataset to, if not already there; default "./data/".
-         width: The desired final height and width of the dataset images; default 28. Note that the
-            images are vectorized, so a width of 28 ultimately corresponds to a batch of size of
-            (batch_size, 784) instead of (batch_size, 28, 28).
-         padding: The number of rings of the padding value to add around the outside of each
-            dataset image. Default value is 0, to add no padding. Note: Padding is added after the
-            resizing transformation such that the final image size is ``(width, width)``.
-         fill: The value to pad with, if padding; default 0.
-
-      Returns:
-         train_set: DataLoader of the training set, each batch is shape (batch_size, width*width).
-         valid_set: DataLoader of the validation set.
-      """
-
-      assert dataset in (BCNDataset.MNIST, BCNDataset.FASHION), \
-         "Given dataset must be MNIST or Fashion-MNIST."
-
-      if dataset == BCNDataset.MNIST:
-         dset = torchvision.datasets.MNIST
-      elif dataset == BCNDataset.FASHION:
-         dset = torchvision.datasets.FashionMNIST
-
-      # transformations
-      tr = torchvision.transforms.Compose([
-         torchvision.transforms.ToTensor(),
-         torchvision.transforms.Resize((width-2*padding)),
-         torchvision.transforms.Pad(padding, fill=fill),
-         lambda image: torch.reshape(image, (image.size().numel(),)) # vectorize!
-      ])
-
-      train_set = DataLoader(
-         dset(root, download=True, train=True, transform=tr), 
-         batch_size=batch_size,
-         drop_last=True,
-         shuffle=True,
-         pin_memory=torch.cuda.is_available()
-      )
-      valid_set = DataLoader(
-         dset(root, download=True, train=False, transform=tr), 
-         batch_size=batch_size,
-         drop_last=True,
-         shuffle=True,
-         pin_memory=torch.cuda.is_available()
-      )
-
-      self.train_set = train_set
-      self.valid_set = valid_set
-
-      return train_set, valid_set
-
-   def train(self, mode: bool=True, optim=None,
-      dataset=BCNDataset.MNIST, batch_size: int=32, root: str="./data/",
-      width: int=28, padding: int=0, fill: int=0):
-      """Prepare the model to begin training.
+   def train(self, scheme):
+      """Set the model to training mode and update the training scheme.
 
       Args:
-         mode: If 
-
-      Todo:
-         Finish this documentation...
+         scheme: The training scheme that this model should follow.
       """
-      if self.verbose: print("Setting up for training...")
-
-      if optim is None: optim = torch.optim.AdamW(model.parameters(), lr=0.001)
-
-      if mode:
-         super().train()
-         self.train_losses = []
-         self.valid_losses = []
-         self.loss_fn = nn.CrossEntropyLoss()
-         self.optim = optim
-         self.epoch = 0
-      else:
-         super().eval()
-
-      if self.verbose: print(f"Fetching {dataset.value} dataset...")
-      self.prepare_dataset(dataset, batch_size, root, width, padding, fill)
+      super().train()
+      self.scheme = scheme
+      self.loss_fn = nn.CrossEntropyLoss()
+      self.optim = scheme.optim(self.parameters(), **scheme.optim_params)
 
    def run_epoch(self):
       """Train for one epoch.
       """
-      flag = not self.training
-      try:
-         self.loss_fn
-      except NameError:
-         flag = True
-      if flag:
-         raise RuntimeError("Please explicitly set model to training mode with .train() method.")
+      assert self.scheme is not None, \
+         "Before training, please explicitly set this model to training mode with .train(scheme)."
 
       # train
       train_loss = 0
-      pbar = self.tqdm(self.train_set, desc=f"Epoch {self.epoch}", unit="b")
+      pbar = self.tqdm(self.scheme.train, desc=f"Epoch {self.results.epoch}", unit="b")
       for i, (batch, labels) in enumerate(pbar):
          # model expects batch_size as last dimension
          batch = torch.transpose(batch, 0, 1)
          self.optim.zero_grad()
          predictions = model.forward(batch)
          loss = self.loss_fn(predictions, labels)
-         train_loss += loss.detach()
-         pbar.set_postfix(loss=f"{loss.detach():.2f}")
+         train_loss += loss.item()
+         pbar.set_postfix(loss=f"{loss.item():.2f}")
          loss.backward()
          self.optim.step()
-      train_loss /= len(self.train_set)
-      self.train_losses.append(train_loss)
+      train_loss /= len(self.scheme.train)
+      self.results.train_losses.append(train_loss)
       if self.verbose:
          print(f"train_loss: {train_loss} (average)")
 
-      # validation
+      # validation loss
       valid_loss = 0
       with torch.no_grad():
-         for i, (batch, labels) in enumerate(self.valid_set):
+         for i, (batch, labels) in enumerate(self.scheme.valid):
             # model expects batch_size as last dimension
             batch = torch.transpose(batch, 0, 1)
             predictions = model.forward(batch)
             loss = self.loss_fn(predictions, labels)
-            valid_loss += loss.detach()
-      valid_loss /= len(self.valid_set)
-      self.valid_losses.append(valid_loss)
+            valid_loss += loss.item()
+      valid_loss /= len(self.scheme.valid)
+      self.results.valid_losses.append(valid_loss)
       if self.verbose:
          print(f"valid_loss: {valid_loss} (average)")
 
-      self.epoch += 1
+      self.results.epoch += 1
 
    def run_epochs(self, n: int):
       """Train for n epochs.
@@ -528,9 +555,10 @@ if __name__ == "__main__":
    # prepare model
    model = BCN(30, 2, 9, dropout=0.1, verbose=1)
    # prepare for training
-   model.train(width=30, padding=1, batch_size=64)
+   scheme = TrainingScheme(width=30, padding=1, batch_size=64)
+   model.train(scheme)
    # train
    model.run_epochs(num_epochs)
    # results
-   print(f"train_losses: {model.train_losses}")
-   print(f"valid_losses: {model.valid_losses}")
+   print(f"train_losses: {model.results.train_losses}")
+   print(f"valid_losses: {model.results.valid_losses}")
