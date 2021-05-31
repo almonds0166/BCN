@@ -12,5 +12,6 @@ Follow [these instructions](https://pytorch.org/get-started/locally/) to install
 
 ## TODO
 
-* ~~Record time to train~~
-* Test on GPU
+* ~~Test on GPU~~
+* Save model networks for later
+* Plotting utilities

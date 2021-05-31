@@ -522,9 +522,10 @@ class BCN(nn.Module):
       pbar = self.tqdm(self.scheme.train, desc=f"Epoch {self.results.epoch}", unit="b")
       for i, (batch, labels) in enumerate(pbar):
          # model expects batch_size as last dimension
-         batch = torch.transpose(batch, 0, 1)
+         batch = torch.transpose(batch, 0, 1).to(self.device)
+         labels = labels.to(self.device)
          self.optim.zero_grad()
-         predictions = torch.roll(model.forward(batch), -1, 1) # keypad fix, see Section _._._
+         predictions = torch.roll(self.forward(batch), -1, 1) # keypad fix, see Section _._._
          loss = self.loss_fn(predictions, labels)
          train_loss += loss.item()
          pbar.set_postfix(loss=f"{loss.item():.2f}")
@@ -549,8 +550,9 @@ class BCN(nn.Module):
       with torch.no_grad():
          for i, (batch, labels) in enumerate(self.scheme.valid):
             # model expects batch_size as last dimension
-            batch = torch.transpose(batch, 0, 1)
-            predictions = torch.roll(model.forward(batch), -1, 1)
+            batch = torch.transpose(batch, 0, 1).to(self.device)
+            labels = labels.to(self.device)
+            predictions = torch.roll(self.forward(batch), -1, 1)
             pred = torch.argmax(predictions, dim=1)
             # loss
             loss = self.loss_fn(predictions, labels)
@@ -558,7 +560,8 @@ class BCN(nn.Module):
             # accuracy
             correct += sum(pred == labels)
             # precision, recall, f1 score
-            p, r, f1, _ = precision_recall_fscore_support(labels, pred, average="micro")
+            p, r, f1, _ = precision_recall_fscore_support(
+               labels.cpu(), pred.cpu(), average="micro")
             precision += p
             recall += r
             f1_score += f1
@@ -597,7 +600,7 @@ class BCN(nn.Module):
 
 if __name__ == "__main__":
    torch.manual_seed(23)
-   num_epochs = 3
+   num_epochs = 1
    # prepare model
    model = BCN(30, 3, 9, dropout=0.1, verbose=1)
    # prepare for training
