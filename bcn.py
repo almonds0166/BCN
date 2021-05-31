@@ -561,7 +561,7 @@ class BCN(nn.Module):
             correct += sum(pred == labels)
             # precision, recall, f1 score
             p, r, f1, _ = precision_recall_fscore_support(
-               labels.cpu(), pred.cpu(), average="micro")
+               labels.cpu(), pred.cpu(), average="weighted")
             precision += p
             recall += r
             f1_score += f1
