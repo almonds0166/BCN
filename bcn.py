@@ -697,8 +697,8 @@ class BCN(nn.Module):
             f"Finished training `{repr(self)}` for {epochs}! "
                f"(took around {total_time} seconds total)\n"
             f"The epoch with best performance was epoch {self.results.best_epoch}:\n"
-            f"* Validation loss: {self.results.best_valid_loss}\n"
-            f"* F1 score: {self.results.f1_scores[self.results.best_epoch]}\n"
+            f"* Validation loss: {round(self.results.best_valid_loss,2)}\n"
+            f"* F1 score: {round(self.results.f1_scores[self.results.best_epoch],3)}\n"
          )
          if "hooks.slack.com" in webhook:
             payload = {"text": content} # slack
