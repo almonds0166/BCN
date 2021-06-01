@@ -5,6 +5,8 @@ import math
 import itertools
 from enum import Enum
 import time
+import urllib.request
+import json
 
 import torch
 import torch.nn as nn
@@ -12,7 +14,7 @@ import numpy as np
 from sklearn.metrics import precision_recall_fscore_support
 import torchvision
 from torch.utils.data import DataLoader
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 DEV = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -48,7 +50,7 @@ class Branches:
       self.connections[key] = value
 
    def __repr__(self):
-      return f"Branches(width={self.width})"
+      return f"{self.__class__.__name__}(width={self.width})"
 
    @staticmethod
    def pan(x, dy: int, dx: int):
@@ -88,7 +90,7 @@ class DirectOnly(Branches):
       # there's nothing necessary to change here since the default is a direct-only kernel
 
    def __repr__(self):
-      return "DirectOnly()"
+      return f"{self.__class__.__name__}()"
 
 class NearestNeighbor(Branches):
    """Branches class representing nearest neighbor connections.
@@ -102,13 +104,12 @@ class NearestNeighbor(Branches):
       self.default = self.default / torch.sum(self.default)
 
    def __repr__(self):
-      return "NearestNeighbor()"
+      return f"{self.__class__.__name__}()"
 
-class NearestNeighbour(Branches):
+class NearestNeighbour(NearestNeighbor):
    """Alias for ``NearestNeighbor``.
    """
-   def __repr__(self):
-      return "NearestNeighbour()"
+   pass
 
 class NextToNN(Branches):
    """Branches class representing next-to-nearest neighbor connections.
@@ -122,7 +123,7 @@ class NextToNN(Branches):
       self.default = self.default / torch.sum(self.default)
 
    def __repr__(self):
-      return "NextToNN()"
+      return f"{self.__class__.__name__}()"
 
 class NearestNeighborOnly(Branches):
    """Branches class representing nearest neighbor connections without the center connection.
@@ -137,13 +138,12 @@ class NearestNeighborOnly(Branches):
       self.default = self.default / torch.sum(self.default)
 
    def __repr__(self):
-      return "NearestNeighborOnly()"
+      return f"{self.__class__.__name__}()"
 
-class NearestNeighbourOnly(Branches):
+class NearestNeighbourOnly(NearestNeighborOnly):
    """Alias for ``NearestNeighborOnly``.
    """
-   def __repr__(self):
-      return "NearestNeighbourOnly()"
+   pass
 
 class NextToNNOnly(Branches):
    """Branches class representing next-to-nearest neighbor connections without the innermost rings.
@@ -160,7 +160,7 @@ class NextToNNOnly(Branches):
       self.default = self.default / torch.sum(self.default)
 
    def __repr__(self):
-      return "NextToNNOnly()"
+      return f"{self.__class__.__name__}()"
 
 class IndirectOnly(Branches):
    """Nearest and next-to-nearest neighbor Branches class, without the center connection.
@@ -175,7 +175,7 @@ class IndirectOnly(Branches):
       self.default = self.default / torch.sum(self.default)
 
    def __repr__(self):
-      return "IndirectOnly()"
+      return f"{self.__class__.__name__}()"
 
 class Dataset(Enum):
    MNIST = "MNIST"
@@ -205,7 +205,8 @@ class TrainingScheme:
    .. _Adam with weight decay: https://www.fast.ai/2018/07/02/adam-weight-decay/
    """
    def __init__(self, optim=None, dataset=Dataset.MNIST, batch_size: int=32, root: str="./data/",
-      width: int=28, padding: int=0, fill: int=0, **kwargs):
+      width: int=28, padding: int=0, fill: int=0,
+      from_weights: str=None, save_path: str=None, **kwargs):
 
       assert dataset in (Dataset.MNIST, Dataset.FASHION), \
          "Given dataset must be MNIST or Fashion-MNIST."
@@ -219,6 +220,11 @@ class TrainingScheme:
       self.width = width
       self.padding = padding
       self.fill = fill
+      self.from_weights = from_weights
+      self.save_path = save_path
+
+      if save_path:
+         Path(save_path).mkdir(parents=True, exist_ok=True) # mkdir as needed
 
       self.prepare_dataset()
 
@@ -271,6 +277,8 @@ class Results:
       f1_scores (list[float]): List of validation set `F1 scores`_ across epochs.
       train_times (list[float]): List of durations, in seconds, each epoch took to train.
       valid_times (list[float]): List of durations, in seconds, each epoch took to test.
+      best_valid_loss (float): Minimum encountered validation loss.
+      best_epoch (int): Epoch corresponding to the minimum validation loss.
 
    .. _precision scores: https://en.wikipedia.org/wiki/Precision_and_recall
    .. _recall scores: https://en.wikipedia.org/wiki/Precision_and_recall
@@ -286,14 +294,32 @@ class Results:
       self.f1_scores = []
       self.train_times = []
       self.valid_times = []
+      self.best_valid_loss = float("inf")
+      self.best_epoch = 0
 
    def __repr__(self):
       plural = self.epoch != 1
-      return f"Results({self.epoch} epoch{'s' if plural else ''})"
+      return f"{self.__class__.__name__}({self.epoch} epoch{'s' if plural else ''})"
 
    def __iter__(self):
       for (k,v) in self.__dict__.items():
          yield (k,v)
+
+   def load(self, path: str):
+      """Load results from path.
+
+      Args:
+         path: File path from which to load the results.
+      """
+      self.__dict__ = torch.load(path)
+
+   def save(self, path: str):
+      """Save results to path.
+
+      Args:
+         path: File path to which to save the results.
+      """
+      torch.save(self.__dict__, path)
 
 class BCNLayer(nn.Module):
    """Branched connection network layer.
@@ -336,34 +362,50 @@ class BCNLayer(nn.Module):
       self.ells = range(-ell, ell+1)
       self.device = device
       self.last = last
-      # construct connection matrices
-      o = self.branches.center
-      self.network = {}
-      for ci in self.ells:
-         for cj in self.ells:
-            self.network[ci,cj] = torch.zeros((self.hw,self.hw)).to(device)
-            # diagonals are all as they should be, the center
-            for xi in range(self.width):
-               for yi in range(self.height):
-                  for xo in range(self.width):
-                     for yo in range(self.height):
-                        # this nested loop represents the connection from
-                        # source (yi,xi) to target (yo,xo)
-                        dy = yo - yi
-                        dx = xo - xi
-                        if (o + dy < 0) or \
-                           (o + dy >= self.branches.width) or \
-                           (o + dx < 0) or \
-                           (o + dx >= self.branches.width):
-                           # skip if there's certainly no branched connection
-                           continue
-                        # corresponding index pair in network matrix
-                        # note that Python (numpy, PyTorch) is row major
-                        j = xi + self.width*yi
-                        i = xo + self.width*yo
-                        # put all the factors in their proper place
-                        # thanks to trial and error
-                        self.network[ci,cj][i,j] = self.branches[ci,cj][o+dy,o+dx]
+
+      # check if the connection matrices are already available locally under ./networks/
+      fname = (
+         f"{self.height}x{self.width}"
+         f"@{self.connections}"
+         f"-{self.branches.__class__.__name__}"
+         f".pt"
+      )
+      fname = Path("./networks/") / fname
+      if fname.exists():
+         # yay!
+         self.network = torch.load(fname, map_location=device)
+      else:
+         # construct connection matrices
+         o = self.branches.center
+         self.network = {}
+         for ci in self.ells:
+            for cj in self.ells:
+               self.network[ci,cj] = torch.zeros((self.hw,self.hw)).to(device)
+               # diagonals are all as they should be, the center
+               for xi in range(self.width):
+                  for yi in range(self.height):
+                     for xo in range(self.width):
+                        for yo in range(self.height):
+                           # this nested loop represents the connection from
+                           # source (yi,xi) to target (yo,xo)
+                           dy = yo - yi
+                           dx = xo - xi
+                           if (o + dy < 0) or \
+                              (o + dy >= self.branches.width) or \
+                              (o + dx < 0) or \
+                              (o + dx >= self.branches.width):
+                              # skip if there's certainly no branched connection
+                              continue
+                           # corresponding index pair in network matrix
+                           # note that Python (numpy, PyTorch) is row major
+                           j = xi + self.width*yi
+                           i = xo + self.width*yo
+                           # put all the factors in their proper place
+                           # thanks to trial and error
+                           self.network[ci,cj][i,j] = self.branches[ci,cj][o+dy,o+dx]
+         # save for later
+         Path("./networks/").mkdir(exist_ok=True)
+         torch.save(self.network, fname)
       # initialize weights
       self.weights = {}
       for dx in self.ells:
@@ -385,9 +427,9 @@ class BCNLayer(nn.Module):
 
    def __repr__(self):
       return (
-         f"BCNLayer("
+         f"{self.__class__.__name__}("
          f"{self.height}x{self.width}"
-         f"@{self.connections}:{self.branches}"
+         f"@{self.connections}-{self.branches}"
          f")"
       )
 
@@ -431,19 +473,20 @@ class BCN(nn.Module):
          branching networks for each layer.
       device: The ``torch.device`` object on which the tensors will be allocated. Default is GPU if
          available, otherwise CPU.
-      dropout: The proportion of dropout to use for each layer.
       mean: The mean of the normal distribution to initialize weights, default 0.0.
       std: The standard deviation of the normal distribution to initialize weights, default 0.5.
+      dropout (float or Tuple[float, ...]): The dropout factor to use for each layer; default 0.1.
+         If provided a tuple of floats, use the values for the corresponding layer. For example,
+         (0, 0.3, 0.5) will set the dropout of the third layer (and following layers if there are
+         any) to 0.5, whereas the first and second layers will have dropouts of 0 and 0.3.
       verbose: Verbosity level. 0 (default) is less text, 1 is medium, 2 is most verbose.
-      tqdm: The tqdm wrapper to use (use tqdm.notebook.tqdm if in a notebook).
 
    Attributes:
       Todo.
    """
    def __init__(self, width: int, depth: int, connections: int,
-      branches=DirectOnly(), device=DEV, dropout: float=0.1,
-      mean: float=0.0, std: float=0.5, verbose: int=0, tqdm=tqdm,
-      *args, **kwargs):
+      branches=DirectOnly(), device=DEV, mean: float=0.0, std: float=0.5, dropout=0.1,
+      verbose: int=0, *args, **kwargs):
       if depth < 1: raise ValueError(f"Depth must be at least 1; given: {depth}.")
       assert connections is None \
          or int(math.sqrt(connections))**2 == connections, \
@@ -462,25 +505,26 @@ class BCN(nn.Module):
       if verbose: print(f"Building BCN model {self.__repr__()}...")
       self.device = device
       self.verbose = verbose
-      self.tqdm = tqdm
       # set up training scheme and results attributes
       self.scheme = None
       self.results = Results()
       # define layers
+      if isinstance(dropout, (int, float)):
+         dropout = (dropout,) # convert to tuple
       self.layers = nn.ModuleList()
       for d in range(depth):
          self.layers.append(
             BCNLayer(
-               width=width, connections=connections, branches=branches,
-               device=device, dropout=dropout, mean=mean, std=std, last=(d == depth-1)
+               width=width, connections=connections, branches=branches, device=device,
+               dropout=dropout[min(len(dropout)-1,d)], mean=mean, std=std, last=(d == depth-1)
             )
          )
 
    def __repr__(self):
       return (
-         f"BCN("
+         f"{self.__class__.__name__}("
          f"{self.height}x{self.width}x{self.depth}"
-         f"@{self.connections}:{self.branches}"
+         f"@{self.connections}-{self.branches}"
          f")"
       )
 
@@ -499,16 +543,26 @@ class BCN(nn.Module):
 
       return y
 
-   def train(self, scheme):
+   def train(self, scheme, from_weights: str=None, save_path: str=None, trial: int=None):
       """Set the model to training mode and update the training scheme.
 
       Args:
          scheme: The training scheme that this model should follow.
+         from_weights: Weights file to begin training from; default is ``None``, to initialize
+            weights randomly.
+         save_path: Directory to save weights under; default is None, not to save weights.
+         trial: Assign the model a trial number, for the sake of repeating experiments. Default is
+            None, in which case the model isn't assigned a trial number.
       """
+      if self.verbose: print("Setting training scheme...")
       super().train()
       self.scheme = scheme
       self.loss_fn = nn.CrossEntropyLoss()
       self.optim = scheme.optim(self.parameters(), **scheme.optim_params)
+      self.trial = trial
+      # load weights if there are any given to load
+      if from_weights:
+         self.load_state_dict(torch.load(from_weights))
 
    def run_epoch(self):
       """Train for one epoch.
@@ -519,7 +573,7 @@ class BCN(nn.Module):
       # train
       stopwatch = time.time()
       train_loss = 0
-      pbar = self.tqdm(self.scheme.train, desc=f"Epoch {self.results.epoch}", unit="b")
+      pbar = tqdm(self.scheme.train, desc=f"Epoch {self.results.epoch}", unit="b")
       for i, (batch, labels) in enumerate(pbar):
          # model expects batch_size as last dimension
          batch = torch.transpose(batch, 0, 1).to(self.device)
@@ -561,7 +615,7 @@ class BCN(nn.Module):
             correct += sum(pred == labels)
             # precision, recall, f1 score
             p, r, f1, _ = precision_recall_fscore_support(
-               labels.cpu(), pred.cpu(), average="weighted")
+               labels.cpu(), pred.cpu(), average="weighted", zero_division=0)
             precision += p
             recall += r
             f1_score += f1
@@ -582,21 +636,80 @@ class BCN(nn.Module):
       if self.verbose:
          print(f"valid_loss: {valid_loss} (average)")
 
+      if valid_loss < self.results.best_valid_loss:
+         self.results.best_valid_loss = valid_loss
+         self.results.best_epoch = self.results.epoch
+         if self.verbose:
+            print("Model improved!")
+
+         # save weights if path was provided
+         if self.scheme.save_path:
+            trial = "" if self.trial is None else f".t{self.trial}"
+            fname = (
+               f"weights"
+               f"_{self.height}x{self.width}x{self.depth}"
+               f"@{self.connections}"
+               f"-{self.branches.__class__.__name__}"
+               f".b{self.scheme.batch_size}"
+               f"{trial}"
+               f".pt"
+            )
+            fname = Path(self.scheme.save_path) / fname
+            torch.save(self.state_dict(), fname)
+            if self.verbose >= 2:
+               print(f"Saved weights to: {fname}")
+
       self.results.valid_times.append(time.time() - stopwatch)
-
-      # predictions: torch.Size([64, 10])
-      # labels: torch.Size([64])
-
       self.results.epoch += 1
 
-   def run_epochs(self, n: int):
+      # update results file if path was provided
+      if self.scheme.save_path:
+         trial = "" if self.trial is None else f".t{self.trial}"
+         fname = (
+            f"results"
+            f"_{self.height}x{self.width}x{self.depth}"
+            f"@{self.connections}"
+            f"-{self.branches.__class__.__name__}"
+            f".b{self.scheme.batch_size}"
+            f"{trial}"
+            f".pkl"
+         )
+         self.results.save(fname)
+
+   def run_epochs(self, n: int, webhook: str=None):
       """Train for n epochs.
 
       Args:
          n: The number of epochs to train for.
+         webhook: The Discord or Slack webhook URL to post to. See `here`_ for what it looks like.
+         
+      .. _here: https://i.imgur.com/Z8qiTE2.png
       """
+      if n <= 0: return
+
       for e in range(n):
          self.run_epoch()
+
+      if webhook:
+         total_time = round(sum(self.results.train_times) + sum(self.results.valid_times))
+         epochs = f"{n} epoch" + ("s" if n != 1 else "")
+         content = (
+            f"Finished training `{repr(self)}` for {epochs}! "
+               f"(took around {total_time} seconds total)\n"
+            f"The epoch with best performance was epoch {self.results.best_epoch}:\n"
+            f"* Validation loss: {self.results.best_valid_loss}\n"
+            f"* F1 score: {self.results.f1_scores[self.results.best_epoch]}\n"
+         )
+         if "hooks.slack.com" in webhook:
+            payload = {"text": content} # slack
+         else:
+            payload = {"content": content} # discord
+         data = json.dumps(payload).encode("utf-8")
+         req = urllib.request.Request(webhook)
+         req.add_header("Content-Type", "application/json; charset=utf-8")
+         req.add_header("User-Agent", "Almonds/0.0")
+         req.add_header("Content-Length", len(data))
+         response = urllib.request.urlopen(req, data)
 
 if __name__ == "__main__":
    torch.manual_seed(23)

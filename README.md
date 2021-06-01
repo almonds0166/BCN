@@ -10,7 +10,14 @@ Follow [these instructions](https://pytorch.org/get-started/locally/) to install
 
 ## TODO
 
-* ~~Investigate why accuracy = recall = precision = f1 score...~~
-* Save model networks for later
+* ~~Save model networks for later~~
 * Plotting utilities
-* Save results
+* ~~Save results, and save weights at minimum validation loss~~
+* ~~Webhooks when done~~
+* Weight perturbation
+* Track precision, recall, etc. per label in addition to average?
+
+### Further along
+
+* Throttle tqdm interval
+* Come up with cleaner way to save & load weights & results
