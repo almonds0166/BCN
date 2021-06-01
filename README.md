@@ -10,10 +10,7 @@ Follow [these instructions](https://pytorch.org/get-started/locally/) to install
 
 ## TODO
 
-* ~~Save model networks for later~~
-* Plotting utilities
-* ~~Save results, and save weights at minimum validation loss~~
-* ~~Webhooks when done~~
+* ~~Plotting utilities~~
 * Weight perturbation
 * Track precision, recall, etc. per label in addition to average?
 

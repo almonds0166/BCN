@@ -267,6 +267,9 @@ class TrainingScheme:
 class Results:
    """Class representing BCN training results.
 
+   Args:
+      tag: Anything notable about the model or results. Used as plot titles when plotting.
+
    Attributes:
       epoch (int): The number of epochs the BCN model has been trained for.
       train_losses (list[float]): List of average training set losses acorss epochs.
@@ -284,7 +287,7 @@ class Results:
    .. _recall scores: https://en.wikipedia.org/wiki/Precision_and_recall
    .. _F1 scores: https://en.wikipedia.org/wiki/F-score
    """
-   def __init__(self):
+   def __init__(self, tag: str=""):
       self.epoch = 0
       self.train_losses = []
       self.valid_losses = []
@@ -296,6 +299,8 @@ class Results:
       self.valid_times = []
       self.best_valid_loss = float("inf")
       self.best_epoch = 0
+
+      self.tag = tag
 
    def __repr__(self):
       plural = self.epoch != 1
@@ -713,11 +718,11 @@ class BCN(nn.Module):
 
 if __name__ == "__main__":
    torch.manual_seed(23)
-   num_epochs = 1
+   num_epochs = 3
    # prepare model
-   model = BCN(30, 3, 9, dropout=0.1, verbose=1)
+   model = BCN(30, 1, 9, dropout=0.1, verbose=1)
    # prepare for training
-   scheme = TrainingScheme(width=30, padding=1, batch_size=64)
+   scheme = TrainingScheme(width=30, padding=1, batch_size=256)
    model.train(scheme)
    # train
    model.run_epochs(num_epochs)
