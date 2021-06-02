@@ -10,9 +10,9 @@ Follow [these instructions](https://pytorch.org/get-started/locally/) to install
 
 ## TODO
 
-* ~~Plotting utilities~~
 * Weight perturbation
-* Track precision, recall, etc. per label in addition to average?
+* Add BCN method to precision, recall, etc. per label in addition to average?
+* Connections changed to 
 
 ### Further along
 

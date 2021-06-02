@@ -355,7 +355,7 @@ class BCNLayer(nn.Module):
          or int(math.sqrt(connections))**2 == connections, \
          (
             f"The number of connections is expected to be a perfect square "
-            f"(namely 9, 25, 49, ...) of None; given {connections}."
+            f"(namely 9, 25, 49, ...) or None; given {connections}."
          )
       # remember args
       self.height = width
@@ -548,14 +548,13 @@ class BCN(nn.Module):
 
       return y
 
-   def train(self, scheme, from_weights: str=None, save_path: str=None, trial: int=None):
+   def train(self, scheme, from_weights: str=None, trial: int=None):
       """Set the model to training mode and update the training scheme.
 
       Args:
          scheme: The training scheme that this model should follow.
          from_weights: Weights file to begin training from; default is ``None``, to initialize
             weights randomly.
-         save_path: Directory to save weights under; default is None, not to save weights.
          trial: Assign the model a trial number, for the sake of repeating experiments. Default is
             None, in which case the model isn't assigned a trial number.
       """
@@ -720,7 +719,7 @@ if __name__ == "__main__":
    torch.manual_seed(23)
    num_epochs = 3
    # prepare model
-   model = BCN(30, 1, 9, dropout=0.1, verbose=1)
+   model = BCN(30, 1, 9, branches=NextToNNOnly(), dropout=0.1, verbose=1)
    # prepare for training
    scheme = TrainingScheme(width=30, padding=1, batch_size=256)
    model.train(scheme)
