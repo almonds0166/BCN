@@ -707,6 +707,7 @@ class BCN(nn.Module):
             f"{trial}"
             f".pkl"
          )
+         fname = Path(self.save_path) / fname
          self.results.save(fname)
 
    def run_epochs(self, n: int, webhook: str=None):
