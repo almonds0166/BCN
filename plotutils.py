@@ -12,7 +12,7 @@ HIGH_CONTRAST = (
    "#DDAA33", # yellow
 )
 
-def plot_loss(results, title: str, height_inches: float, width_inches: float):
+def plot_loss(results, title: str, height_inches: float=10, width_inches: float=10):
    """Plot model loss results.
 
    Args:
@@ -63,7 +63,7 @@ def plot_loss(results, title: str, height_inches: float, width_inches: float):
             valid_max[i,j,e] = valid_max[i,j,e] - valid_avg[i,j,e]
 
    fig, axes = plt.subplots(h,w)
-   fig.set_size_inches(WIDTH_INCHES, HEIGHT_INCHES)
+   fig.set_size_inches(width_inches, height_inches)
 
    for i in range(h):
       for j in range(w):
@@ -74,7 +74,7 @@ def plot_loss(results, title: str, height_inches: float, width_inches: float):
             yerr=[train_min[i,j], train_max[i,j]],
             color=HIGH_CONTRAST[0],
             label="Train",
-            linewidth=4
+            linewidth=3
          )
          ax.errorbar(
             range(epochs),
@@ -82,10 +82,10 @@ def plot_loss(results, title: str, height_inches: float, width_inches: float):
             yerr=[valid_min[i,j], valid_max[i,j]],
             color=HIGH_CONTRAST[1],
             label="Valid",
-            linewidth=4
+            linewidth=3
          )
          ax.set_ylim((-0.05, 2.80))
-         ax.set_title(R[i,j,0].name)
+         ax.set_title(R[i,j,0].tag)
          if j == 0: ax.set_ylabel("Loss")
          if i == h-1: ax.set_xlabel("Epoch")
          if (i,j) == (h-1,w-1): ax.legend()
@@ -95,7 +95,7 @@ def plot_loss(results, title: str, height_inches: float, width_inches: float):
 
    return plt.show()
 
-def plot_f1_scores(results, title: str, height_inches: float, width_inches: float):
+def plot_f1_scores(results, title: str, height_inches: float=10, width_inches: float=10):
    """Plot model F1 scores of results.
 
    Args:
@@ -146,12 +146,12 @@ def plot_f1_scores(results, title: str, height_inches: float, width_inches: floa
             range(epochs),
             f1_avg[i,j],
             yerr=[f1_min[i,j], f1_max[i,j]],
-            color=HIGH_CONTRAST[1],
+            color=HIGH_CONTRAST[2],
             label="F1 score",
-            linewidth=4
+            linewidth=3
          )
          ax.set_ylim((-0.05, 1.05))
-         ax.set_title(R[i,j,0].name)
+         ax.set_title(R[i,j,0].tag)
          if j == 0: ax.set_ylabel("F1 score")
          if i == h-1: ax.set_xlabel("Epoch")
          #if (i,j) == (h-1,w-1): ax.legend()

@@ -18,6 +18,15 @@ from tqdm.auto import tqdm
 
 DEV = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
+class Connections(Enum):
+   """Enum class representing the number of directed connections AKA "arms".
+   """
+   ONE_TO_9 = 9
+   ONE_TO_25 = 25
+   ONE_TO_49 = 49
+   ONE_TO_81 = 81
+   FULLY_CONNECTED = "Inf"
+
 class Branches:
    """Base class representing branching connections.
 
@@ -52,6 +61,16 @@ class Branches:
    def __repr__(self):
       return f"{self.__class__.__name__}(width={self.width})"
 
+   def normalize(self, norm: float=1):
+      """Normalize the sum of the connections to a norm.
+
+      Args:
+         norm: The norm to use.
+      """
+      assert norm > 0, f"norm must be a positive float; given: `{norm}`."
+      self.default = norm * self.default / torch.sum(self.default)
+
+
    @staticmethod
    def pan(x, dy: int, dx: int):
       """Pan a tensor ``x`` down ``dy`` and over ``dx``.
@@ -84,6 +103,9 @@ class Branches:
 
 class DirectOnly(Branches):
    """Branches class representing only direct connections ("pristine", "ideal").
+
+   For direct-only connections, each arm has only one finger. This is more or less equivalent to a
+   standard dense neural network layer.
    """
    def __init__(self, *args, **kwargs):
       super().__init__(*args, **kwargs)
@@ -94,6 +116,8 @@ class DirectOnly(Branches):
 
 class NearestNeighbor(Branches):
    """Branches class representing nearest neighbor connections.
+
+   For nearest neighbor connections, each arm has 9 fingers.
    """
    def __init__(self, *args, **kwargs):
       super().__init__(*args, **kwargs)
@@ -113,6 +137,8 @@ class NearestNeighbour(NearestNeighbor):
 
 class NextToNN(Branches):
    """Branches class representing next-to-nearest neighbor connections.
+
+   For next-to-nearest neighbor connections, each arm has 25 fingers.
    """
    def __init__(self, *args, **kwargs):
       super().__init__(*args, **kwargs)
@@ -127,6 +153,9 @@ class NextToNN(Branches):
 
 class NearestNeighborOnly(Branches):
    """Branches class representing nearest neighbor connections without the center connection.
+
+   For this connection scheme, each arm has 8 fingers touching the corresponding first ring of
+   indirect target neurons.
    """
    def __init__(self, *args, **kwargs):
       super().__init__(*args, **kwargs)
@@ -147,6 +176,9 @@ class NearestNeighbourOnly(NearestNeighborOnly):
 
 class NextToNNOnly(Branches):
    """Branches class representing next-to-nearest neighbor connections without the innermost rings.
+
+   For this connection scheme, each arm has 16 fingers touching the corresponding second ring of
+   indirect target neurons.
    """
    def __init__(self, *args, **kwargs):
       super().__init__(*args, **kwargs)
@@ -164,6 +196,9 @@ class NextToNNOnly(Branches):
 
 class IndirectOnly(Branches):
    """Nearest and next-to-nearest neighbor Branches class, without the center connection.
+
+   For this connection scheme, each arm has 24 fingers, touching the corresponding first two rings
+   of indirect target neurons.
    """
    def __init__(self, *args, **kwargs):
       super().__init__(*args, **kwargs)
@@ -178,6 +213,8 @@ class IndirectOnly(Branches):
       return f"{self.__class__.__name__}()"
 
 class Dataset(Enum):
+   """Enum class representing datasets, MNIST and Fashion-MNIST.
+   """
    MNIST = "MNIST"
    FASHION = "Fashion-MNIST"
 
@@ -331,8 +368,7 @@ class BCNLayer(nn.Module):
 
    Args:
       width: The side length of the layer.
-      connections: The number of direct connections each neuron makes; 9, 25, 49, etc. Use
-         ``None`` for a fully-connected network.
+      connections (Connections): The number of direct connections each neuron makes.
       branches (Branches): The type of indirect (branching) connections used to construct the
          branching network.
       device: The ``torch.device`` object on which the tensors will be allocated. Default is GPU if
@@ -347,23 +383,20 @@ class BCNLayer(nn.Module):
    Attributes:
       Todo.
    """
-   def __init__(self, width: int, connections: int=None, branches=DirectOnly(),
-      device=DEV, dropout=0.1, mean=0.0, std=0.5, last: bool=False,
+   def __init__(self, width: int, connections: Connections=Connections.FULLY_CONNECTED,
+      branches=DirectOnly(), device=DEV, dropout=0.1, mean=0.0, std=0.5, last: bool=False,
       *args, **kwargs):
       super().__init__(*args, **kwargs)
-      assert connections is None \
-         or int(math.sqrt(connections))**2 == connections, \
-         (
-            f"The number of connections is expected to be a perfect square "
-            f"(namely 9, 25, 49, ...) or None; given {connections}."
-         )
       # remember args
       self.height = width
       self.width = width
       self.hw = self.height*self.width
       self.connections = connections
       self.branches = branches
-      ell = (branches.width-1)//2 if connections is None else (int(math.sqrt(connections))-1)//2
+      if connections == Connections.FULLY_CONNECTED:
+         ell = (branches.width-1)//2
+      else:
+         ell = (int(math.sqrt(connections.value))-1)//2
       self.ells = range(-ell, ell+1)
       self.device = device
       self.last = last
@@ -371,7 +404,7 @@ class BCNLayer(nn.Module):
       # check if the connection matrices are already available locally under ./networks/
       fname = (
          f"{self.height}x{self.width}"
-         f"@{self.connections}"
+         f"@{self.connections.value}"
          f"-{self.branches.__class__.__name__}"
          f".pt"
       )
@@ -434,7 +467,7 @@ class BCNLayer(nn.Module):
       return (
          f"{self.__class__.__name__}("
          f"{self.height}x{self.width}"
-         f"@{self.connections}-{self.branches}"
+         f"@{self.connections.value}-{self.branches}"
          f")"
       )
 
@@ -472,8 +505,7 @@ class BCN(nn.Module):
    Args:
       width: The side length of each layer.
       depth: The depth of the network, equal to the number of nonlinear activations.
-      connections: The number of direct connections each neuron makes; 9, 25, 49, etc. Use
-         ``None`` for a fully-connected network.
+      connections (Connections): The number of direct connections each neuron makes.
       branches (Branches): The type of indirect (branching) connections used to construct the
          branching networks for each layer.
       device: The ``torch.device`` object on which the tensors will be allocated. Default is GPU if
@@ -489,16 +521,10 @@ class BCN(nn.Module):
    Attributes:
       Todo.
    """
-   def __init__(self, width: int, depth: int, connections: int,
+   def __init__(self, width: int, depth: int, connections: Connections=Connections.FULLY_CONNECTED,
       branches=DirectOnly(), device=DEV, mean: float=0.0, std: float=0.5, dropout=0.1,
       verbose: int=0, *args, **kwargs):
       if depth < 1: raise ValueError(f"Depth must be at least 1; given: {depth}.")
-      assert connections is None \
-         or int(math.sqrt(connections))**2 == connections, \
-         (
-            f"The number of connections is expected to be a perfect square "
-            f"(namely 9, 25, 49, ...) or None; given {connections}."
-         )
       super().__init__(*args, **kwargs)
       # remember args
       self.height = width
@@ -507,6 +533,8 @@ class BCN(nn.Module):
       self.depth = depth
       self.connections = connections
       self.branches = branches
+      self.save_path = None
+      self.trial = None
       if verbose: print(f"Building BCN model {self.__repr__()}...")
       self.device = device
       self.verbose = verbose
@@ -529,7 +557,7 @@ class BCN(nn.Module):
       return (
          f"{self.__class__.__name__}("
          f"{self.height}x{self.width}x{self.depth}"
-         f"@{self.connections}-{self.branches}"
+         f"@{self.connections.value}-{self.branches}"
          f")"
       )
 
@@ -548,7 +576,7 @@ class BCN(nn.Module):
 
       return y
 
-   def train(self, scheme, from_weights: str=None, trial: int=None):
+   def train(self, scheme, from_weights: str=None, save_path: str=None, trial: int=None):
       """Set the model to training mode and update the training scheme.
 
       Args:
@@ -564,6 +592,7 @@ class BCN(nn.Module):
       self.loss_fn = nn.CrossEntropyLoss()
       self.optim = scheme.optim(self.parameters(), **scheme.optim_params)
       self.trial = trial
+      self.save_path = save_path
       # load weights if there are any given to load
       if from_weights:
          self.load_state_dict(torch.load(from_weights))
@@ -647,18 +676,18 @@ class BCN(nn.Module):
             print("Model improved!")
 
          # save weights if path was provided
-         if self.scheme.save_path:
+         if self.save_path:
             trial = "" if self.trial is None else f".t{self.trial}"
             fname = (
                f"weights"
                f"_{self.height}x{self.width}x{self.depth}"
-               f"@{self.connections}"
+               f"@{self.connections.value}"
                f"-{self.branches.__class__.__name__}"
                f".b{self.scheme.batch_size}"
                f"{trial}"
                f".pt"
             )
-            fname = Path(self.scheme.save_path) / fname
+            fname = Path(self.save_path) / fname
             torch.save(self.state_dict(), fname)
             if self.verbose >= 2:
                print(f"Saved weights to: {fname}")
@@ -667,12 +696,12 @@ class BCN(nn.Module):
       self.results.epoch += 1
 
       # update results file if path was provided
-      if self.scheme.save_path:
+      if self.save_path:
          trial = "" if self.trial is None else f".t{self.trial}"
          fname = (
             f"results"
             f"_{self.height}x{self.width}x{self.depth}"
-            f"@{self.connections}"
+            f"@{self.connections.value}"
             f"-{self.branches.__class__.__name__}"
             f".b{self.scheme.batch_size}"
             f"{trial}"
@@ -716,16 +745,21 @@ class BCN(nn.Module):
          response = urllib.request.urlopen(req, data)
 
 if __name__ == "__main__":
-   torch.manual_seed(23)
-   num_epochs = 3
-   # prepare model
-   model = BCN(30, 1, 9, branches=NextToNNOnly(), dropout=0.1, verbose=1)
-   # prepare for training
-   scheme = TrainingScheme(width=30, padding=1, batch_size=256)
-   model.train(scheme)
-   # train
-   model.run_epochs(num_epochs)
-   # results
-   print("Results:")
-   for key, value in model.results:
-      print(f"\t{key}: {value}")
+   trial = 1
+   num_epochs = 50
+   dataset = Dataset.MNIST
+   width = 30
+   connections = Connections.ONE_TO_9
+   for depth in (3,6):
+      for branches in (DirectOnly(), NextToNN()):
+         for batch_size in (64, 256):
+            # prepare model
+            model = BCN(width, depth, connections, branches)
+            # prepare for training
+            scheme = TrainingScheme(dataset=dataset, width=width, padding=1, batch_size=batch_size)
+            model.train(scheme, trial=trial, save_path="./results/")
+            model.run_epochs(num_epochs)
+            print("Results:")
+            for k, v in model.results:
+               print(f"\t{k}: {v}")
+   print("Done.")
