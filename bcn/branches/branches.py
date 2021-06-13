@@ -1,21 +1,33 @@
 
+from typing import Optional, Dict, Tuple
+
 import torch
 import numpy as np
 
 class Branches:
    """Base class representing branching connections.
+
    Each branching (indirect) connection is encoded by a matrix where each element represents the
    connection from a previous layer to the following layer. The center of this matrix represents
    the connection from a previous layer's neuron to the single nearest neighbor neuron in the next
    layer. Likewise, off center elements represent connections from a previous layer's neuron to off
    center nearest neighbor neurons. Class instances act the same as Python dicts.
+
+   Note:
+      Directly index into this class's instances instead of using Branches.connections.
    
    Args:
-      width: Size of the matrices representing the branches, default 9.
+      width: Size of the matrices representing the branches. Default 9.
+
    Attributes:
+      width: Size of the matrices representing the branches.
       center (int): index of the center of the matrices representing the branches.
+      connections (Dict[Tuple[int,int],torch.Tensor]): Map from 2-dimensional offset to the matrix
+         that represents the indirect connections/convolution kernel.
+      default (torch.Tensor): The matrix to use when an offset isn't defined in
+         Branches.connections.
    """
-   def __init__(self, width: int=9):
+   def __init__(self, width: Optional[int]=9):
       if width % 2 == 0: raise ValueError(f"Width must be odd; {width} given.")
       if width < 3: raise ValueError(f"Width must be at least 3; {width} given.")
       self.width = width
@@ -34,10 +46,11 @@ class Branches:
    def __repr__(self):
       return f"{self.__class__.__name__}(width={self.width})"
 
-   def normalize(self, norm: float=1):
+   def normalize(self, norm: float=1) -> None:
       """Normalize the sum of the connections to a norm.
+
       Args:
-         norm: The norm to use.
+         norm: The norm to use, default 1.
       """
       assert norm > 0, f"norm must be a positive float; given: `{norm}`."
 
@@ -49,13 +62,18 @@ class Branches:
             self.connections[k] = norm * v / sum_
 
    @staticmethod
-   def pan(x, dy: int, dx: int):
+   def pan(x: torch.Tensor, dy: int, dx: int) -> torch.Tensor:
       """Pan a tensor ``x`` down ``dy`` and over ``dx``.
+
       Similar to torch.roll, circularly convolves the given tensor, instead with zero padding.
+
       Args:
-         x (tensor.torch): 2D matrix to pan.
+         x: 2D matrix to pan.
          dy: Count of places to shift the tensor downward.
          dx: Count of places to shift the tensor rightward.
+
+      Returns:
+         y (torch.Tensor): Panned/shifted matrix.
       """
       if dy == 0 and dx == 0: return x
       h, w = x.size()
@@ -76,12 +94,13 @@ class Branches:
 
       return y
 
-class Inoela(Branches):
-   """
-   Connection matrices designed by Inoela Vital and Cardinal Warde ca. 2021, based off of the
-   empirical numbers obtained by William "Bill" Herrington ca. 2015.
+class Vital(Branches):
+   """Connection matrices designed by Inoela Vital and Cardinal Warde ca. 2021.
 
-   This can be used with 1-to-9 connections and 1-to-25 connections.
+   Based off of the empirical numbers obtained by William "Bill" Herrington ca. 2015.
+
+   Note:
+      This is used with 1-to-9 connections or 1-to-25 connections only.
    """
    def __init__(self):
       super().__init__(width=7)
