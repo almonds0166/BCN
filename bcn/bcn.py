@@ -405,6 +405,8 @@ class BCN(nn.Module):
          any particular trial.
       scheme (Optional[TrainingScheme]): The training scheme to use when training this model.
          Specified by the BCN.train method.
+      save_path (Optional[Path]): The path to save weights & results so, specified with the
+         BCN.train method.
       results (Results): The model training results.
       layers (nn.ModuleList): The list of BCNLayer layers.
    """
@@ -490,6 +492,7 @@ class BCN(nn.Module):
             weights randomly.
          trial: Assign the model a trial number, for the sake of repeating experiments. Default is
             ``None``, in which case the model isn't assigned a trial number.
+         save_path: Path to save weights to.
          tag: Anything notable about the model or results. Used as plot titles when plotting.
       """
       if self.verbose: print("Setting training scheme...")
@@ -498,12 +501,12 @@ class BCN(nn.Module):
       self.loss_fn = nn.CrossEntropyLoss()
       self.optim = scheme.optim(self.parameters(), **scheme.optim_params)
       self.trial = trial
-      self.save_path = save_path
+      self.save_path = Path(save_path)
       # load weights if there are any given to load
       if from_weights:
          self.load_state_dict(torch.load(from_weights))
       if save_path:
-         Path(save_path).mkdir(parents=True, exist_ok=True) # mkdir as needed
+         self.save_path.mkdir(parents=True, exist_ok=True) # mkdir as needed
 
    def run_epoch(self) -> None:
       """Train for one epoch.
@@ -598,7 +601,7 @@ class BCN(nn.Module):
                f"{trial}"
                f".pt"
             )
-            fname = Path(self.save_path) / fname
+            fname = self.save_path / fname
             torch.save(self.state_dict(), fname)
             if self.verbose >= 2:
                print(f"Saved weights to: {fname}")
@@ -618,7 +621,7 @@ class BCN(nn.Module):
             f"{trial}"
             f".pkl"
          )
-         fname = Path(self.save_path) / fname
+         fname = self.save_path / fname
          self.results.save(fname)
 
       #return valid_loss
