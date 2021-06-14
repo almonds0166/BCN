@@ -94,6 +94,19 @@ class Branches:
 
       return y
 
+class DirectOnly(Branches):
+   """Branches class representing only direct connections ("pristine", "ideal").
+
+   For direct-only connections, each arm has only one finger. This is more or less equivalent to a
+   standard dense neural network layer.
+   """
+   def __init__(self, *args, **kwargs):
+      super().__init__(*args, **kwargs)
+      # there's nothing necessary to change here since the default is a direct-only kernel
+
+   def __repr__(self):
+      return f"{self.__class__.__name__}()"
+
 class Vital(Branches):
    """Connection matrices designed by Inoela Vital and Cardinal Warde ca. 2021.
 

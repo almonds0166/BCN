@@ -17,8 +17,7 @@ import torchvision
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
-from branches import Branches
-from branches.simple import DirectOnly
+from .branches import Branches, DirectOnly
 
 DEV = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -276,33 +275,12 @@ class BCNLayer(nn.Module):
          self.network = torch.load(fname, map_location=device)
       else:
          # construct connection matrices
-         o = self.branches.center
-         self.network = {}
-         for ci in self.ells:
-            for cj in self.ells:
-               self.network[ci,cj] = torch.zeros((self.hw,self.hw)).to(device)
-               # diagonals are all as they should be, the center
-               for xi in range(self.width):
-                  for yi in range(self.height):
-                     for xo in range(self.width):
-                        for yo in range(self.height):
-                           # this nested loop represents the connection from
-                           # source (yi,xi) to target (yo,xo)
-                           dy = yo - yi
-                           dx = xo - xi
-                           if (o + dy < 0) or \
-                              (o + dy >= self.branches.width) or \
-                              (o + dx < 0) or \
-                              (o + dx >= self.branches.width):
-                              # skip if there's certainly no branched connection
-                              continue
-                           # corresponding index pair in network matrix
-                           # note that Python (numpy, PyTorch) is row major
-                           j = xi + self.width*yi
-                           i = xo + self.width*yo
-                           # put all the factors in their proper place
-                           # thanks to trial and error
-                           self.network[ci,cj][i,j] = self.branches[ci,cj][o+dy,o+dx]
+         self.network = BCN.construct_network(
+            self.width,
+            self.connections,
+            self.branches,
+            device=device
+         )
          # save for later
          Path("./networks/").mkdir(exist_ok=True)
          torch.save(self.network, fname)
@@ -661,6 +639,49 @@ class BCN(nn.Module):
          req.add_header("User-Agent", "Almonds/0.0")
          req.add_header("Content-Length", len(data))
          response = urllib.request.urlopen(req, data)
+
+   @staticmethod
+   def construct_network(
+      width: int, connections: Connections, branches: Branches,
+      device: torch.device=DEV
+   ) -> Dict[Tuple[int,int],torch.Tensor]:
+      """Todo.
+      """
+      hw = width*width
+      if connections == Connections.FULLY_CONNECTED:
+         ell = (branches.width-1)//2
+      else:
+         ell = (int(math.sqrt(connections.value))-1)//2
+      ells = range(-ell,ell+1)
+      o = branches.center
+      network = {}
+      for ci in ells:
+         for cj in ells:
+            network[ci,cj] = torch.zeros((hw,hw)).to(device)
+            # diagonals are all as they should be, the center
+            for xi in range(width):
+               for yi in range(width):
+                  for xo in range(width):
+                     for yo in range(width):
+                        # this nested loop represents the connection from
+                        # source (yi,xi) to target (yo,xo)
+                        dy = yo - yi
+                        dx = xo - xi
+                        if (o + dy < 0) or \
+                           (o + dy >= branches.width) or \
+                           (o + dx < 0) or \
+                           (o + dx >= branches.width):
+                           # skip if there's certainly no branched connection
+                           continue
+                        # corresponding index pair in network matrix
+                        # note that Python (numpy, PyTorch) is row major
+                        j = xi + width*yi
+                        i = xo + width*yo
+                        # put all the factors in their proper place
+                        # thanks to trial and error
+                        network[ci,cj][i,j] = branches[ci,cj][o+dy,o+dx]
+
+      return network
 
 if __name__ == "__main__":
    pass

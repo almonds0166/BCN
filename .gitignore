@@ -10,3 +10,6 @@ results/
 
 # connection matrices
 networks/
+
+# virtual environment
+venv/
