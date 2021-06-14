@@ -10,12 +10,11 @@ Follow [these instructions](https://pytorch.org/get-started/locally/) to install
 
 ## TODO
 
-* Design GUI to help understand Branches
+* ~~Design GUI to help understand Branches~~
+* Improve GUI (7x7 instead of 5x5)
 * Weight perturbation
 * Add BCN method to precision, recall, etc. per label in addition to average?
 * Connections/branches should maybe use numpy arrays instead of torch tensors? and 16 instead of 32
+* Come up with cleaner way to save & load weights & results
 
 ### Further along
-
-* Throttle tqdm interval
-* Come up with cleaner way to save & load weights & results
