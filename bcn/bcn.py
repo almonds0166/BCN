@@ -399,7 +399,7 @@ class BCN(nn.Module):
       **kwargs
    ):
       if depth < 1: raise ValueError(f"Depth must be at least 1; given: {depth}.")
-      super().__init__(*args, **kwargs)
+      super().__init__()
       # remember args
       self.height = width
       self.width = width
@@ -485,6 +485,8 @@ class BCN(nn.Module):
          self.load_state_dict(torch.load(from_weights))
       if save_path:
          self.save_path.mkdir(parents=True, exist_ok=True) # mkdir as needed
+      # set tag!
+      self.results.tag = tag
 
    def run_epoch(self) -> None:
       """Train for one epoch.

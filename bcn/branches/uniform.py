@@ -1,5 +1,5 @@
 
-from .branches import Branches
+from .branches import Branches, DirectOnly
 
 class NearestNeighbor(Branches):
    """Branches class representing nearest neighbor connections.
