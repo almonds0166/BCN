@@ -158,7 +158,7 @@ class Results:
    .. _recall scores: https://en.wikipedia.org/wiki/Precision_and_recall
    .. _F1 scores: https://en.wikipedia.org/wiki/F-score
    """
-   def __init__(self, tag: str=""):
+   def __init__(self):
       self.epoch = 0
       self.train_losses = []
       self.valid_losses = []
@@ -455,6 +455,7 @@ class BCN(nn.Module):
 
    def train(self, scheme, *,
       from_weights: Union[Path,str,None]=None,
+      from_results: Union[Path,str,None]=None,
       save_path: Union[Path,str,None]=None,
       trial: Optional[int]=None,
       tag: str=""
@@ -483,6 +484,9 @@ class BCN(nn.Module):
       # load weights if there are any given to load
       if from_weights:
          self.load_state_dict(torch.load(from_weights))
+      # load results if there are any given to load
+      if from_results:
+         self.results.load(from_results)
       if save_path:
          self.save_path.mkdir(parents=True, exist_ok=True) # mkdir as needed
       # set tag!
@@ -509,7 +513,7 @@ class BCN(nn.Module):
          predictions = torch.roll(self(batch), -1, 1) # keypad fix, see Section _._._
          loss = self.loss_fn(predictions, labels)
          train_loss += loss.item()
-         pbar.set_postfix(loss=f"{loss.item():.2f}")
+         if i % 10 == 0: pbar.set_postfix(loss=f"{loss.item():.2f}")
          loss.backward()
          self.optim.step()
       # average loss
