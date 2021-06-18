@@ -9,34 +9,6 @@ import bcn
 from bcn.branches import Branches, DirectOnly, Vital
 from bcn.branches import simple, uniform
 
-TABLE_WIDGETS = lambda ui: {
-   (-2,-2): ui.tw_PP,
-   (-2,-1): ui.tw_PT,
-   (-2, 0): ui.tw_P0,
-   (-2, 1): ui.tw_P1,
-   (-2, 2): ui.tw_P2,
-   (-1,-2): ui.tw_TP,
-   (-1,-1): ui.tw_TT,
-   (-1, 0): ui.tw_T0,
-   (-1, 1): ui.tw_T1,
-   (-1, 2): ui.tw_T2,
-   ( 0,-2): ui.tw_0P,
-   ( 0,-1): ui.tw_0T,
-   ( 0, 0): ui.tw_00,
-   ( 0, 1): ui.tw_01,
-   ( 0, 2): ui.tw_02,
-   ( 1,-2): ui.tw_1P,
-   ( 1,-1): ui.tw_1T,
-   ( 1, 0): ui.tw_10,
-   ( 1, 1): ui.tw_11,
-   ( 1, 2): ui.tw_12,
-   ( 2,-2): ui.tw_2P,
-   ( 2,-1): ui.tw_2T,
-   ( 2, 0): ui.tw_20,
-   ( 2, 1): ui.tw_21,
-   ( 2, 2): ui.tw_22,
-}
-
 class Handles:
    def click_load():
       """Handles when the user presses the Load button under Branch matrices tools"""
@@ -59,22 +31,11 @@ class Handles:
 
       branches = selected_to_branches[selected]()
 
-      table_widgets = TABLE_WIDGETS(ui)
+      for dy in range(-2,2+1):
+         for dx in range(-2,2+1):
+            KERNELS[dy+2,dx+2,:,:] = branches[dy,dx].cpu().numpy()
 
-      o = branches.center
-      for dx in range(-2,2+1):
-         for dy in range(-2,2+1):
-            for i in range(-2,2+1):
-               for j in range(-2,2+1):
-                  value = branches[dy,dx][o+i,o+j].cpu().numpy()
-                  item = table_widgets[dy,dx].item(2+i, 2+j)
-                  if value == 0:
-                     item.setText(QtCore.QCoreApplication.translate("MainWindow", ""))
-                  else:
-                     item.setText(QtCore.QCoreApplication.translate(
-                        "MainWindow",
-                        str(value).rstrip('0').rstrip('.')
-                     ))
+      update_kernel(ui)
 
    def click_compute():
       """Handles the Compute button."""
@@ -93,6 +54,74 @@ class Handles:
       set_output(ui, O)
       allow_user_input(ui, True)
 
+   def select_weight(selected, deselected):
+      """Handles when the user selects a different direct connection."""
+      global SELECTED_ROW, SELECTED_COL
+      index = selected.indexes()[0]
+
+      ui.tw_kernel.setEnabled(True)
+
+      SELECTED_ROW = index.row()
+      SELECTED_COL = index.column()
+
+      update_kernel(ui)
+
+   def kernel_update(row, col):
+      """Handles when the user edits the kernel."""
+      global SELECTED_ROW, SELECTED_COL, KERNELS
+
+      item = ui.tw_kernel.item(row, col)
+      if item is None: item = new_item()
+      value = item.text().strip()
+      if value:
+         try:
+            KERNELS[SELECTED_ROW,SELECTED_COL,row,col] = float(value)
+            item.setText(
+               QtCore.QCoreApplication.translate(
+                  "MainWindow",
+                  str(value).rstrip('0').rstrip('.')
+               )
+            )
+         except ValueError:
+            KERNELS[SELECTED_ROW,SELECTED_COL,row,col] = 0
+            item.setText(QtCore.QCoreApplication.translate("MainWindow", ""))
+         ui.tw_kernel.setItem(row, col, item) # I think this is called even if automated
+      else:
+         KERNELS[SELECTED_ROW,SELECTED_COL,row,col] = 0
+
+   def click_copypaste():
+      """Handles clicking the ^ button, to copy output to input"""
+      for i in range(12):
+         for j in range(12):
+            out_item = ui.tw_output.item(i, j)
+            if out_item is None: out_item = new_item()
+            in_item = new_item()
+            in_item.setText(out_item.text())
+            ui.tw_input.setItem(i, j, in_item)
+
+def new_item():
+   item = QtWidgets.QTableWidgetItem()
+   item.setTextAlignment(QtCore.Qt.AlignCenter)
+   return item
+
+def update_kernel(ui):
+   """Takes what's in KERNEL and updates tw_kernel"""
+   global SELECTED_ROW, SELECTED_COL, KERNELS
+
+   for i in range(9):
+      for j in range(9):
+         value = KERNELS[SELECTED_ROW,SELECTED_COL,i,j]
+         item = ui.tw_kernel.item(i, j)
+         if item is None: item = new_item()
+         if value == 0:
+            item.setText(QtCore.QCoreApplication.translate("MainWindow", ""))
+         else:
+            item.setText(QtCore.QCoreApplication.translate(
+               "MainWindow",
+               str(value).rstrip('0').rstrip('.')
+            ))
+         ui.tw_kernel.setItem(i, j, item)
+
 def allow_user_input(ui, allow: bool) -> None:
    """Enable or disable user input"""
    for x in (
@@ -100,12 +129,8 @@ def allow_user_input(ui, allow: bool) -> None:
       #ui.btn_norm,
       ui.btn_load,
       ui.tw_weights,
-      ui.cb_direct,
-      ui.tw_PP, ui.tw_PT, ui.tw_P0, ui.tw_P1, ui.tw_P2,
-      ui.tw_TP, ui.tw_TT, ui.tw_T0, ui.tw_T1, ui.tw_T2,
-      ui.tw_0P, ui.tw_0T, ui.tw_00, ui.tw_01, ui.tw_02,
-      ui.tw_1P, ui.tw_1T, ui.tw_10, ui.tw_11, ui.tw_12,
-      ui.tw_2P, ui.tw_2T, ui.tw_20, ui.tw_21, ui.tw_22,
+      #ui.cb_direct,
+      ui.tw_kernel,
       ui.tw_input,
       ui.tw_output,
    ):
@@ -127,20 +152,12 @@ def get_weights(ui) -> np.array:
 
 def get_branches(ui) -> Branches:
    """Get the branch connection values as a Branches object."""
-   B = Branches(5)
-   table_widgets = TABLE_WIDGETS(ui)
+   global KERNELS
+   B = Branches(9)
+
    for dx in range(-2,2+1):
       for dy in range(-2,2+1):
-         tw = table_widgets[dy,dx]
-         B[dy,dx] = np.zeros((5,5))
-         for i in range(5):
-            for j in range(5):
-               item = tw.item(i, j).text().strip()
-               if item:
-                  try:
-                     B[dy,dx][i,j] = float(item)
-                  except ValueError:
-                     pass
+         B[dy,dx] = KERNELS[dy+2,dx+2,:,:]
 
    return B
 
@@ -179,6 +196,11 @@ def set_output(ui, O) -> None:
             ))
 
 if __name__ == "__main__":
+   global SELECTED_ROW, SELECTED_COL, KERNELS
+   SELECTED_ROW = 2
+   SELECTED_COL = 2
+   KERNELS = np.zeros((5,5,9,9))
+
    app = QtWidgets.QApplication(sys.argv)
    MainWindow = QtWidgets.QMainWindow()
    ui = Ui_MainWindow()
@@ -187,6 +209,9 @@ if __name__ == "__main__":
    ui.actionQuit.triggered.connect(MainWindow.close)
    ui.btn_load.clicked.connect(Handles.click_load)
    ui.btn_in2out.clicked.connect(Handles.click_compute)
+   ui.btn_out2in.clicked.connect(Handles.click_copypaste)
+   ui.tw_weights.selectionModel().selectionChanged.connect(Handles.select_weight)
+   ui.tw_kernel.cellChanged.connect(Handles.kernel_update)
 
    MainWindow.show()
    sys.exit(app.exec_())
