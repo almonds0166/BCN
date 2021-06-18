@@ -208,7 +208,7 @@ class BCNLayer(nn.Module):
          available, otherwise CPU.
       dropout: The proportion of dropout to use for this layer, default 0.1.
       mean: The mean of the normal distribution to initialize weights, default 0.0.
-      std: The standard deviation of the normal distribution to initialize weights, default 0.5.
+      std: The standard deviation of the normal distribution to initialize weights, default 0.05.
       last: Whether the layer is the final layer in the model or not, default False. If True, the
          forward output is a (10, -1) tensor representing the raw, unnormalized scores of the
          ten-digit "keypad" (refer to thesis, Section _._._) ready for cross entropy loss.
@@ -244,7 +244,7 @@ class BCNLayer(nn.Module):
       device: torch.device=DEV,
       dropout: float=0.1,
       mean: float=0.0,
-      std: float=0.5,
+      std: float=0.05,
       last: bool=False
    ):
       super().__init__()
@@ -354,7 +354,7 @@ class BCN(nn.Module):
       device: The ``torch.device`` object on which the tensors will be allocated. Default is GPU if
          available, otherwise CPU.
       mean: The mean of the normal distribution to initialize weights, default 0.0.
-      std: The standard deviation of the normal distribution to initialize weights, default 0.5.
+      std: The standard deviation of the normal distribution to initialize weights, default 0.05.
       dropout: The dropout factor to use for each layer; default 0.1. If provided a tuple of
          floats, use the values for the corresponding layer. For example, (0, 0.3, 0.5) will set
          the dropout of the third layer (and following layers if there are any) to 0.5, whereas the
@@ -393,7 +393,7 @@ class BCN(nn.Module):
       branches: Branches=DirectOnly(),
       device: torch.device=DEV,
       mean: float=0.0,
-      std: float=0.5,
+      std: float=0.05,
       dropout: Union[Tuple[float,...],float]=0.1,
       verbose: int=0,
       **kwargs

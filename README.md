@@ -16,5 +16,6 @@ Follow [these instructions](https://pytorch.org/get-started/locally/) to install
 * Connections/branches should use numpy arrays instead of torch tensors (much faster according to testing!) and 16 instead of 32 (to save disk space)
 * Differentiate simple branches from uniform branches of the same name
 * Come up with cleaner way to save & load weights & results
+* Convert weights dict to tensor
 
 ### Further along
