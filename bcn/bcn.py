@@ -41,8 +41,8 @@ class TrainingScheme:
 
    Args:
       optim: The torch Optimizer class that should be used for training. Default is `Adam with
-         weight decay`_, AKA ``torch.optim.AdamW``.
-      dataset: The dataset to use, MNIST or FASHION.
+         weight decay`_, AKA ``torch.optim.AdamW`` (note the lack of ``()``).
+      dataset: The dataset to use, `Dataset.MNIST` or `Dataset.FASHION`. Default is MNIST.
       batch_size: The batch size used for training, default 32.
       dataset_path: The directory to download the dataset to, if not already there; default is
          ``./data/``.
@@ -57,21 +57,19 @@ class TrainingScheme:
 
    Attributes:
       optim (type): The torch Optimizer used for training.
-      dataset (Dataset): The dataset used, MNIST or FASHION.
+      dataset (Dataset): The dataset used, `Dataset.MNIST` or `Dataset.FASHION`.
       batch_size (int): The batch size used for training.
-      dataset_path (Union[Path,str]): The directory to download the dataset to, if not already
-         there.
-      width (int): The height and width of the dataset images. Note that the images are vectorized,
-         so a width of 28 ultimately corresponds to a batch of size of (``batch_size``, 784)
-         instead of (``batch_size``, 28, 28).
+      dataset_path (~pathlib.Path): The directory to download the dataset to, if not
+         already there.
+      width (int): The height and width of the model layers.
       padding (int): The number of rings of the padding value to add around the outside of each
          dataset image. Note: Padding is added after the resizing transformation so that the final
          image size is (``width``, ``width``) before vectorization.
       fill (int): The value to pad with, if padding.
       optim_params (Dict[str,Any]): The keyword arguments passed to the instance, to be use by the
          optimizer.
-      train (DataLoader): Torch DataLoader representing the training set.
-      valid (DataLoader): Torch DataLoader representing the validation set.
+      train (~torch.utils.data.DataLoader): Torch DataLoader representing the training set.
+      valid (~torch.utils.data.DataLoader): Torch DataLoader representing the validation set.
 
    .. _Adam with weight decay: https://www.fast.ai/2018/07/02/adam-weight-decay/
    """
@@ -93,7 +91,7 @@ class TrainingScheme:
       self.optim_params = kwargs
       self.dataset = dataset
       self.batch_size = batch_size
-      self.dataset_path = dataset_path
+      self.dataset_path = Path(dataset_path)
       self.width = width
       self.padding = padding
       self.fill = fill
@@ -152,7 +150,7 @@ class Results:
       best_valid_loss (float): Minimum encountered validation loss.
       best_epoch (int): Epoch corresponding to the minimum validation loss.
       tag (str): Anything notable about the model or results. Used as plot titles when plotting.
-         Set via the BCN.train method.
+         Set via the `BCN.train` method.
 
    .. _precision scores: https://en.wikipedia.org/wiki/Precision_and_recall
    .. _recall scores: https://en.wikipedia.org/wiki/Precision_and_recall
@@ -204,7 +202,7 @@ class BCNLayer(nn.Module):
       connections: The number of direct connections each neuron makes. Default is 1-to-9.
       branches: The type of indirect (branching) connections used to construct the branching
          network. Default is direct connections only.
-      device: The ``torch.device`` object on which the tensors will be allocated. Default is GPU if
+      device: The `torch.device` object on which the tensors will be allocated. Default is GPU if
          available, otherwise CPU.
       dropout: The proportion of dropout to use for this layer, default 0.1.
       mean: The mean of the normal distribution to initialize weights, default 0.0.
@@ -222,7 +220,7 @@ class BCNLayer(nn.Module):
          branching network.
       device (torch.device): The ``torch.device`` object on which the tensors will be allocated.
          Default is GPU if available, otherwise CPU.
-      dropout (nn.Dropout): The torch Dropout module use when training.
+      dropout (torch.nn.Dropout): The torch Dropout module use when training.
       mean (float): The mean of the normal distribution used to initialize weights.
       std (float): The standard deviation of the normal distribution used to initialize weights.
       last (bool): Whether the layer is the final layer in the model or not. If ``True``, the
@@ -233,7 +231,7 @@ class BCNLayer(nn.Module):
          a span of width 5.
       network (Dict[Tuple[int,int],torch.Tensor]): In future versions, this will probably be a
          tensor for performance reasons. I'll hold off on complete documentation for now.
-      weights (Dict[Tuple[int,int],nn.Parameter]): In future versions, this will probably be a
+      weights (Dict[Tuple[int,int],torch.nn.Parameter]): In future versions, this will probably be a
          tensor for performance reasons. I'll hold off on complete documentation for now.
       mask (Optional[torch.Tensor]): If this is a last layer, the mask attribute represents a
          tensor that filters the output to ten values. ``None`` if this is not a last layer.
@@ -315,14 +313,14 @@ class BCNLayer(nn.Module):
       """The forward computation performed at every BCNLayer call.
 
       Note:
-         Call the BCNLayer instance instead of using this method directly.
+         Call the BCNLayer instance itself instead of using this method directly.
 
       Args:
          x: The input tensor of size (``features``, ``batch_size``).
 
       Returns:
-         y: The output tensor. Size is (``features``, ``batch_size``) if this layer is not the last
-            layer, otherwise (10, ``batch_size``).
+         The output tensor. Size is (``features``, ``batch_size``) if this layer is not the
+         last layer, otherwise (10, ``batch_size``).
       """
       # might there be a way to vectorize this?
       y = torch.zeros(x.size()).to(self.device)
@@ -351,7 +349,7 @@ class BCN(nn.Module):
       connections: The number of direct connections each neuron makes. Default is 1-to-9.
       branches: The type of indirect (branching) connections used to construct the branching
          networks for each layer. Default is direct connections only.
-      device: The ``torch.device`` object on which the tensors will be allocated. Default is GPU if
+      device: The `torch.device` object on which the tensors will be allocated. Default is GPU if
          available, otherwise CPU.
       mean: The mean of the normal distribution to initialize weights, default 0.0.
       std: The standard deviation of the normal distribution to initialize weights, default 0.05.
@@ -370,7 +368,7 @@ class BCN(nn.Module):
       connections (Connections): The number of direct connections each neuron makes.
       branches (Branches): The type of indirect (branching) connections used to construct the
          branching networks for each layer. Default is direct connections only.
-      device (torch.device): The ``torch.device`` object on which the tensors will be allocated.
+      device (torch.device): The `torch.device` object on which the tensors will be allocated.
       mean (float): The mean of the normal distribution used to initialize weights.
       std (float): The standard deviation of the normal distribution used to initialize weights.
       dropout (Tuple[float,...]): The proportion of dropout to use for each layer, as a tuple of
@@ -383,14 +381,14 @@ class BCN(nn.Module):
          any particular trial.
       scheme (Optional[TrainingScheme]): The training scheme to use when training this model.
          Specified by the BCN.train method.
-      save_path (Optional[Path]): The path to save weights & results so, specified with the
+      save_path (Optional[~pathlib.Path]): The path to save weights & results so, specified with the
          BCN.train method.
       results (Results): The model training results.
-      layers (nn.ModuleList): The list of BCNLayer layers.
+      layers (~torch.nn.ModuleList): The list of BCNLayer layers.
    """
    def __init__(self, width: int, depth: int, *,
       connections: Connections=Connections.ONE_TO_9,
-      branches: Branches=DirectOnly(),
+      branches: Optional[Branches]=None,
       device: torch.device=DEV,
       mean: float=0.0,
       std: float=0.05,
@@ -406,7 +404,10 @@ class BCN(nn.Module):
       self.hw = self.height*self.width
       self.depth = depth
       self.connections = connections
-      self.branches = branches
+      if branches is not None:
+         self.branches = branches
+      else:
+         self.branches = DirectOnly()
       self.save_path = None
       self.trial = None
       if verbose: print(f"Building BCN model {self.__repr__()}...")
@@ -615,7 +616,7 @@ class BCN(nn.Module):
       #return valid_loss
 
    def run_epochs(self, n: int, webhook: Optional[str]=None) -> None:
-      """Train for ``n`` epochs.
+      """Train for some number of epochs.
 
       Args:
          n: The number of epochs to train for.

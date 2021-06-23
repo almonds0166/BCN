@@ -14,20 +14,20 @@ class Branches:
    center nearest neighbor neurons. Class instances act the same as Python dicts.
 
    Note:
-      Directly index into this class's instances instead of using Branches.connections.
+      Directly index into this class's instances instead of using the `Branches.connections` dict.
    
    Args:
       width: Size of the matrices representing the branches. Default 9.
 
    Attributes:
-      width: Size of the matrices representing the branches.
+      width (int): Size of the matrices representing the branches.
       center (int): index of the center of the matrices representing the branches.
       connections (Dict[Tuple[int,int],torch.Tensor]): Map from 2-dimensional offset to the matrix
          that represents the indirect connections/convolution kernel.
       default (torch.Tensor): The matrix to use when an offset isn't defined in
-         Branches.connections.
+         `Branches.connections`.
    """
-   def __init__(self, width: Optional[int]=9):
+   def __init__(self, width: int=9):
       if width % 2 == 0: raise ValueError(f"Width must be odd; {width} given.")
       if width < 3: raise ValueError(f"Width must be at least 3; {width} given.")
       self.width = width
@@ -73,7 +73,7 @@ class Branches:
          dx: Count of places to shift the tensor rightward.
 
       Returns:
-         y (torch.Tensor): Panned/shifted matrix.
+         torch.Tensor: Panned/shifted matrix.
       """
       if dy == 0 and dx == 0: return x
       h, w = x.size()
