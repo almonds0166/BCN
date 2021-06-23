@@ -1636,9 +1636,6 @@
     </property>
    </widget>
    <widget class="QComboBox" name="cb_direct">
-    <property name="enabled">
-     <bool>false</bool>
-    </property>
     <property name="geometry">
      <rect>
       <x>210</x>
@@ -1649,12 +1646,12 @@
     </property>
     <item>
      <property name="text">
-      <string>ONE_TO_9</string>
+      <string>1-to-9</string>
      </property>
     </item>
     <item>
      <property name="text">
-      <string>ONE_TO_25</string>
+      <string>1-to-25</string>
      </property>
     </item>
    </widget>
@@ -1993,29 +1990,13 @@
      <string>Load</string>
     </property>
    </widget>
-   <widget class="QCheckBox" name="checkBox">
-    <property name="enabled">
-     <bool>false</bool>
-    </property>
-    <property name="geometry">
-     <rect>
-      <x>240</x>
-      <y>1100</y>
-      <width>171</width>
-      <height>41</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>rotate and transpose</string>
-    </property>
-   </widget>
    <widget class="QPushButton" name="btn_norm">
     <property name="enabled">
      <bool>false</bool>
     </property>
     <property name="geometry">
      <rect>
-      <x>70</x>
+      <x>190</x>
       <y>1100</y>
       <width>161</width>
       <height>41</height>
@@ -2036,62 +2017,62 @@
     </property>
     <item>
      <property name="text">
-      <string>DirectOnly</string>
+      <string>Direct only</string>
      </property>
     </item>
     <item>
      <property name="text">
-      <string>Vital</string>
+      <string>Empirically based branches</string>
      </property>
     </item>
     <item>
      <property name="text">
-      <string>uniform.NearestNeighbor</string>
+      <string>Nearest neighbor (uniform)</string>
      </property>
     </item>
     <item>
      <property name="text">
-      <string>uniform.NearestNeighborOnly</string>
+      <string>Nearest neighbor only (uniform)</string>
      </property>
     </item>
     <item>
      <property name="text">
-      <string>uniform.NextToNN</string>
+      <string>Next-to-nearest neighbor (uniform)</string>
      </property>
     </item>
     <item>
      <property name="text">
-      <string>uniform.NextToNNOnly</string>
+      <string>Next-to-nearest neighbor only (uniform)</string>
      </property>
     </item>
     <item>
      <property name="text">
-      <string>uniform.IndirectOnly</string>
+      <string>Indirect only (uniform)</string>
      </property>
     </item>
     <item>
      <property name="text">
-      <string>simple.NearestNeighbor</string>
+      <string>Nearest neighbor (simple)</string>
      </property>
     </item>
     <item>
      <property name="text">
-      <string>simple.NearestNeighborOnly</string>
+      <string>Nearest neighbor only (simple)</string>
      </property>
     </item>
     <item>
      <property name="text">
-      <string>simple.NextToNN</string>
+      <string>Next-to-nearest neighbor (simple)</string>
      </property>
     </item>
     <item>
      <property name="text">
-      <string>simple.NextToNNOnly</string>
+      <string>Next-to-nearest neighbor only (simple)</string>
      </property>
     </item>
     <item>
      <property name="text">
-      <string>simple.IndirectOnly</string>
+      <string>Indirect only (simple)</string>
      </property>
     </item>
    </widget>
@@ -2346,7 +2327,15 @@
     <addaction name="separator"/>
     <addaction name="actionAbout_this_project"/>
    </widget>
+   <widget class="QMenu" name="menuEdit">
+    <property name="title">
+     <string>Edit</string>
+    </property>
+    <addaction name="actionClear_input_plane"/>
+    <addaction name="actionClear_output_plane"/>
+   </widget>
    <addaction name="menuFile"/>
+   <addaction name="menuEdit"/>
    <addaction name="menuHelp"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
@@ -2387,6 +2376,16 @@
   <action name="actionAbout_this_project">
    <property name="text">
     <string>About</string>
+   </property>
+  </action>
+  <action name="actionClear_input_plane">
+   <property name="text">
+    <string>Clear input plane</string>
+   </property>
+  </action>
+  <action name="actionClear_output_plane">
+   <property name="text">
+    <string>Clear output plane</string>
    </property>
   </action>
  </widget>

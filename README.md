@@ -14,10 +14,6 @@ Follow [these instructions](https://pytorch.org/get-started/locally/) to install
 
 * Weight perturbation
 * Add BCN method to precision, recall, etc. per label in addition to average
-
-## GUI TODO
-* Investigate `QTableWidget: cannot insert an item that is already owned by another QTableWidget` issue
-* Fix Vital branched connections to 9x9 instead of 7x7
-* Add button to clear input/output planes
+* Actually work on the thesis :F
 
 ### Further along

@@ -15,18 +15,18 @@ class Handles:
       selected = ui.cb_branches.currentText()
 
       selected_to_branches = {
-         "DirectOnly": DirectOnly,
-         "Vital": Vital,
-         "uniform.NearestNeighbor": uniform.NearestNeighbor,
-         "uniform.NearestNeighborOnly": uniform.NearestNeighborOnly,
-         "uniform.NextToNN": uniform.NextToNN,
-         "uniform.NextToNNOnly": uniform.NextToNNOnly,
-         "uniform.IndirectOnly": uniform.IndirectOnly,
-         "simple.NearestNeighbor": simple.NearestNeighbor,
-         "simple.NearestNeighborOnly": simple.NearestNeighborOnly,
-         "simple.NextToNN": simple.NextToNN,
-         "simple.NextToNNOnly": simple.NextToNNOnly,
-         "simple.IndirectOnly": simple.IndirectOnly,
+         "Direct only": DirectOnly,
+         "Empirically based branches": Vital,
+         "Nearest neighbor (uniform)": uniform.NearestNeighbor,
+         "Nearest neighbor only (uniform)": uniform.NearestNeighborOnly,
+         "Next-to-nearest neighbor (uniform)": uniform.NextToNN,
+         "Next-to-nearest neighbor only (uniform)": uniform.NextToNNOnly,
+         "Indirect only (uniform)": uniform.IndirectOnly,
+         "Nearest neighbor (simple)": simple.NearestNeighbor,
+         "Nearest neighbor only (simple)": simple.NearestNeighborOnly,
+         "Next-to-nearest neighbor (simple)": simple.NextToNN,
+         "Next-to-nearest neighbor only (simple)": simple.NextToNNOnly,
+         "Indirect only (simple)": simple.IndirectOnly,
       }
 
       branches = selected_to_branches[selected]()
@@ -60,6 +60,7 @@ class Handles:
       index = selected.indexes()[0]
 
       ui.tw_kernel.setEnabled(True)
+      ui.btn_norm.setEnabled(True)
 
       SELECTED_ROW = index.row()
       SELECTED_COL = index.column()
@@ -85,7 +86,6 @@ class Handles:
          except ValueError:
             KERNELS[SELECTED_ROW,SELECTED_COL,row,col] = 0
             item.setText(QtCore.QCoreApplication.translate("MainWindow", ""))
-         ui.tw_kernel.setItem(row, col, item) # I think this is called even if automated
       else:
          KERNELS[SELECTED_ROW,SELECTED_COL,row,col] = 0
 
@@ -98,6 +98,66 @@ class Handles:
             in_item = new_item()
             in_item.setText(out_item.text())
             ui.tw_input.setItem(i, j, in_item)
+
+   def select_connections(value):
+      """Handles when the user selects number of direct connections (1-to-9 or 1-to-25)"""
+
+      outer_ring = (
+         (0,0),(0,1),(0,2),(0,3),(0,4),
+         (1,0),                  (1,4),
+         (2,0),                  (2,4),
+         (3,0),                  (3,4),
+         (4,0),(4,1),(4,2),(4,3),(4,4),
+      )
+      enable = (value == "1-to-25")
+
+      Qt = QtCore.Qt
+      enabled_flags = 0 \
+         | Qt.ItemIsDragEnabled \
+         | Qt.ItemIsUserCheckable \
+         | Qt.ItemIsEnabled \
+         | Qt.ItemIsSelectable \
+         | Qt.ItemIsEditable
+
+      disabled_flags = 0 \
+         | Qt.ItemIsDragEnabled \
+         | Qt.ItemIsUserCheckable \
+
+      for i, j in outer_ring:
+         item = ui.tw_weights.item(i, j)
+         if item is None:
+            item = new_item()
+            ui.tw_weights.setItem(i, j, item)
+
+         if enable:
+            item.setFlags(enabled_flags)
+            item.setText(QtCore.QCoreApplication.translate("MainWindow", "1"))
+         else:
+            item.setFlags(disabled_flags)
+            item.setText(QtCore.QCoreApplication.translate("MainWindow", ""))
+
+   def clear_input_plane():
+      """Activated when user hits Edit > Clear input plane """
+      for i in range(12):
+         for j in range(12):
+            ui.tw_input.setItem(i, j, new_item())
+
+   def clear_output_plane():
+      """Activated when user hits Edit > Clear output plane """
+      for i in range(12):
+         for j in range(12):
+            ui.tw_output.setItem(i, j, new_item())
+
+   def normalize_kernel():
+      """Activated when the user clicks the Normalize button"""
+      global KERNELS
+      for dy in range(4):
+         for dx in range(4):
+            total = np.sum(KERNELS[dy,dx,:,:])
+            if total != 0:
+               KERNELS[dy,dx,:,:] = KERNELS[dy,dx,:,:] / total
+
+      update_kernel(ui)
 
 def new_item():
    item = QtWidgets.QTableWidgetItem()
@@ -112,7 +172,9 @@ def update_kernel(ui):
       for j in range(9):
          value = KERNELS[SELECTED_ROW,SELECTED_COL,i,j]
          item = ui.tw_kernel.item(i, j)
-         if item is None: item = new_item()
+         if item is None:
+            item = new_item()
+            ui.tw_kernel.setItem(i, j, item)
          if value == 0:
             item.setText(QtCore.QCoreApplication.translate("MainWindow", ""))
          else:
@@ -120,7 +182,6 @@ def update_kernel(ui):
                "MainWindow",
                str(value).rstrip('0').rstrip('.')
             ))
-         ui.tw_kernel.setItem(i, j, item)
 
 def allow_user_input(ui, allow: bool) -> None:
    """Enable or disable user input"""
@@ -129,7 +190,7 @@ def allow_user_input(ui, allow: bool) -> None:
       #ui.btn_norm,
       ui.btn_load,
       ui.tw_weights,
-      #ui.cb_direct,
+      ui.cb_direct,
       ui.tw_kernel,
       ui.tw_input,
       ui.tw_output,
@@ -164,8 +225,8 @@ def get_branches(ui) -> Branches:
 def get_connections(ui) -> bcn.Connections:
    """Get the selected type of connections."""
    selected = ui.cb_direct.currentText()
-   if selected == "ONE_TO_9": return bcn.Connections.ONE_TO_9
-   if selected == "ONE_TO_25": return bcn.Connections.ONE_TO_25
+   if selected == "1-to-9": return bcn.Connections.ONE_TO_9
+   if selected == "1-to-25": return bcn.Connections.ONE_TO_25
 
 def get_input(ui) -> np.array:
    """Get the input matrix"""
@@ -207,11 +268,15 @@ if __name__ == "__main__":
    ui.setupUi(MainWindow)
 
    ui.actionQuit.triggered.connect(MainWindow.close)
+   ui.actionClear_input_plane.triggered.connect(Handles.clear_input_plane)
+   ui.actionClear_output_plane.triggered.connect(Handles.clear_output_plane)
    ui.btn_load.clicked.connect(Handles.click_load)
    ui.btn_in2out.clicked.connect(Handles.click_compute)
    ui.btn_out2in.clicked.connect(Handles.click_copypaste)
    ui.tw_weights.selectionModel().selectionChanged.connect(Handles.select_weight)
    ui.tw_kernel.cellChanged.connect(Handles.kernel_update)
+   ui.cb_direct.currentTextChanged.connect(Handles.select_connections)
+   ui.btn_norm.clicked.connect(Handles.normalize_kernel)
 
    MainWindow.show()
    sys.exit(app.exec_())
