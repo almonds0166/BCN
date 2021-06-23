@@ -13,11 +13,7 @@ Follow [these instructions](https://pytorch.org/get-started/locally/) to install
 ## TODO
 
 * Weight perturbation
-* Add BCN method to precision, recall, etc. per label in addition to average?
-* Connections/branches should use numpy arrays instead of torch tensors (much faster according to testing!) and 16 instead of 32 (to save disk space)
-* Differentiate simple branches from uniform branches of the same name
-* Come up with cleaner way to save & load weights & results
-* Convert weights dict to tensor
+* Add BCN method to precision, recall, etc. per label in addition to average
 
 ## GUI TODO
 * Investigate `QTableWidget: cannot insert an item that is already owned by another QTableWidget` issue
