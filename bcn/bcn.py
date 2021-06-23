@@ -439,13 +439,13 @@ class BCN(nn.Module):
       """The forward computation performed at every BCN call.
 
       Note:
-         Call the BCN instance instead of using this method directly.
+         Call the BCN instance itself instead of using this method directly.
 
       Args:
          x: The input tensor of size (``features``, ``batch_size``).
 
       Returns:
-         y: The output tensor of size (10, ``batch_size``).
+         The output tensor of size (10, ``batch_size``).
       """
       y = x
       for d in range(self.depth):
@@ -453,7 +453,8 @@ class BCN(nn.Module):
 
       return y
 
-   def train(self, scheme, *,
+   def train(self, flag: bool=True, *,
+      scheme: Optional[TrainingScheme]=None,
       from_weights: Union[Path,str,None]=None,
       from_results: Union[Path,str,None]=None,
       save_path: Union[Path,str,None]=None,
@@ -467,41 +468,43 @@ class BCN(nn.Module):
 
       Args:
          scheme: The training scheme that this model should follow.
+
+      Keyword args:
          from_weights: Weights file to begin training from; default is ``None``, to initialize
             weights randomly.
          trial: Assign the model a trial number, for the sake of repeating experiments. Default is
             ``None``, in which case the model isn't assigned a trial number.
          save_path: Path to save weights to.
-         tag: Anything notable about the model or results. Used as plot titles when plotting.
+         tag: Anything notable about the model or results. Intended to be used as plot titles when
+            plotting.
       """
-      if self.verbose: print("Setting training scheme...")
-      super().train()
-      self.scheme = scheme
-      self.loss_fn = nn.CrossEntropyLoss()
-      self.optim = scheme.optim(self.parameters(), **scheme.optim_params)
-      self.trial = trial
-      self.save_path = Path(save_path)
-      # load weights if there are any given to load
-      if from_weights:
-         self.load_state_dict(torch.load(from_weights))
-      # load results if there are any given to load
-      if from_results:
-         self.results.load(from_results)
+      super().train(flag)
+
+      if scheme is not None:
+         if self.verbose: print("Setting training scheme...")
+         self.scheme = scheme
+         self.loss_fn = nn.CrossEntropyLoss()
+         self.optim = scheme.optim(self.parameters(), **scheme.optim_params)
+
+      if from_weights: self.load_state_dict(torch.load(from_weights))
+      if from_results: self.results.load(from_results)
       if save_path:
+         self.save_path = Path(save_path)
          self.save_path.mkdir(parents=True, exist_ok=True) # mkdir as needed
-      # set tag!
-      self.results.tag = tag
+      if trial: self.trial = trial
+      if tag: self.results.tag = tag
 
    def run_epoch(self) -> None:
       """Train for one epoch.
 
-      Note:
+      Important:
          Remember to set the training scheme before running this method.
       """
       assert self.scheme is not None, \
          "Before training, please explicitly set this model to training mode with .train(scheme)."
 
       # train
+      self.train()
       stopwatch = time.time()
       train_loss = 0
       pbar = tqdm(self.scheme.train, desc=f"Epoch {self.results.epoch}", unit="b")
@@ -526,6 +529,7 @@ class BCN(nn.Module):
       self.results.train_times.append(time.time() - stopwatch)
 
       # validation loss
+      self.eval()
       stopwatch = time.time()
       valid_loss = 0
       correct = 0
