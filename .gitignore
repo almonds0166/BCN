@@ -13,3 +13,6 @@ networks/
 
 # virtual environment
 venv/
+
+# documentation
+docs/build/
