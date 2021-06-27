@@ -17,6 +17,7 @@ import torchvision
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
+from .__init__ import __version__
 from .branches import Branches, DirectOnly
 
 DEV = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -151,6 +152,7 @@ class Results:
       best_epoch (int): Epoch corresponding to the minimum validation loss.
       tag (str): Anything notable about the model or results. Used as plot titles when plotting.
          Set via the `BCN.train` method.
+      version (str): The version of the BCN Python module that these results came from.
 
    .. _precision scores: https://en.wikipedia.org/wiki/Precision_and_recall
    .. _recall scores: https://en.wikipedia.org/wiki/Precision_and_recall
@@ -169,6 +171,7 @@ class Results:
       self.best_valid_loss = float("inf")
       self.best_epoch = 0
       self.tag = ""
+      self.version = __version__
 
    def __repr__(self):
       plural = self.epoch != 1
@@ -204,7 +207,7 @@ class BCNLayer(nn.Module):
          network. Default is direct connections only.
       device: The `torch.device` object on which the tensors will be allocated. Default is GPU if
          available, otherwise CPU.
-      dropout: The proportion of dropout to use for this layer, default 0.1.
+      dropout: The proportion of dropout to use for this layer, default 0.0.
       mean: The mean of the normal distribution to initialize weights, default 0.0.
       std: The standard deviation of the normal distribution to initialize weights, default 0.05.
       last: Whether the layer is the final layer in the model or not, default False. If True, the
@@ -240,7 +243,7 @@ class BCNLayer(nn.Module):
       connections: Connections=Connections.ONE_TO_9,
       branches: Branches=DirectOnly(),
       device: torch.device=DEV,
-      dropout: float=0.1,
+      dropout: float=0.0,
       mean: float=0.0,
       std: float=0.05,
       last: bool=False
@@ -353,7 +356,7 @@ class BCN(nn.Module):
          available, otherwise CPU.
       mean: The mean of the normal distribution to initialize weights, default 0.0.
       std: The standard deviation of the normal distribution to initialize weights, default 0.05.
-      dropout: The dropout factor to use for each layer; default 0.1. If provided a tuple of
+      dropout: The dropout factor to use for each layer; default 0.0. If provided a tuple of
          floats, use the values for the corresponding layer. For example, (0, 0.3, 0.5) will set
          the dropout of the third layer (and following layers if there are any) to 0.5, whereas the
          first and second layers will have dropouts of 0 and 0.3 respectively.
@@ -392,7 +395,7 @@ class BCN(nn.Module):
       device: torch.device=DEV,
       mean: float=0.0,
       std: float=0.05,
-      dropout: Union[Tuple[float,...],float]=0.1,
+      dropout: Union[Tuple[float,...],float]=0.0,
       verbose: int=0,
       **kwargs
    ):
@@ -586,6 +589,7 @@ class BCN(nn.Module):
                f"_{self.height}x{self.width}x{self.depth}"
                f"@{self.connections.value}"
                f"-{self.branches.__class__.__name__}"
+               f".{self.scheme.dataset.name}"
                f".b{self.scheme.batch_size}"
                f"{trial}"
                f".pt"
@@ -606,6 +610,7 @@ class BCN(nn.Module):
             f"_{self.height}x{self.width}x{self.depth}"
             f"@{self.connections.value}"
             f"-{self.branches.__class__.__name__}"
+            f".{self.scheme.dataset.name}"
             f".b{self.scheme.batch_size}"
             f"{trial}"
             f".pkl"
