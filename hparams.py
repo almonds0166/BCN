@@ -5,6 +5,7 @@ from bcn import BCN, TrainingScheme
 from bcn import Dataset, Connections
 from bcn.branches.simple import DirectOnly, NearestNeighborOnly, NextToNNOnly
 
+BRANCHES = DirectOnly()
 DATASET = Dataset.MNIST
 CONNECTIONS = Connections.ONE_TO_9
 
@@ -19,30 +20,29 @@ if __name__ == "__main__":
 
    for width in (30, 16):
       for depth in (6, 3):
-         for branches in (DirectOnly(), NearestNeighborOnly(), NextToNNOnly()):
-            for trial in (1, 2, 3):
-               # prepare model
-               model = BCN(
-                  width, depth,
-                  connections=CONNECTIONS,
-                  branches=branches,
-                  dropout=0,
-               )
-               # prepare for training
-               scheme = TrainingScheme(
-                  dataset=DATASET,
-                  width=width,
-                  padding=1,
-                  batch_size=BATCH_SIZE,
-                  optim=OPTIMIZER
-               )
-               model.train(
-                  scheme=scheme,
-                  trial=trial,
-                  save_path="./results/",
-                  tag=f"{width}x{width}x{depth}, {branches.__class__.__name__}"
-               )
-               
-               model.run_epochs(NUM_EPOCHS, webhook=webhook)
+         for trial in (1, 2, 3):
+            # prepare model
+            model = BCN(
+               width, depth,
+               connections=CONNECTIONS,
+               branches=BRANCHES,
+               dropout=0,
+            )
+            # prepare for training
+            scheme = TrainingScheme(
+               dataset=DATASET,
+               width=width,
+               padding=1,
+               batch_size=BATCH_SIZE,
+               optim=OPTIMIZER
+            )
+            model.train(
+               scheme=scheme,
+               trial=trial,
+               save_path="./results/",
+               tag=f"{width}x{width}x{depth}, {BRANCHES.__class__.__name__}"
+            )
+            
+            model.run_epochs(NUM_EPOCHS, webhook=webhook)
 
    print("Done.")
