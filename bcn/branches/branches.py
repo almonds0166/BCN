@@ -54,11 +54,13 @@ class Branches:
       """
       assert norm > 0, f"norm must be a positive float; given: `{norm}`."
 
-      if (sum_ := torch.sum(self.default)) != 0:
+      sum_ = torch.sum(self.default)
+      if sum_ != 0:
          self.default = norm * self.default / sum_
 
       for k, v in self.connections.items():
-         if (sum_ := torch.sum(v)) != 0:
+         sum_ = torch.sum(v)
+         if sum_ != 0:
             self.connections[k] = norm * v / sum_
 
    @staticmethod

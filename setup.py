@@ -14,6 +14,7 @@ setup(
    py_modules=["bcn"],
    classifiers=[ # https://pypi.org/classifiers/
       "Development Status :: 3 - Alpha",
+      "Programming Language :: Python :: 3.7",
       "Programming Language :: Python :: 3.8",
       "Programming Language :: Python :: 3.9",
       #"Programming Language :: Python :: 3.10",
@@ -45,7 +46,7 @@ setup(
          "pipreqs==0.4.10",
       ]
    },
-   python_requires=">=3.8.0",
+   python_requires=">=3.7.0",
    url="https://github.com/almonds0166/BCN",
    author="Madison Landry",
    author_email="mlandry@mit.edu",
