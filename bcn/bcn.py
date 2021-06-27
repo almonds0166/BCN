@@ -8,6 +8,7 @@ import time
 import urllib.request
 import json
 from typing import Any, Union, Optional, Tuple, List, Set, Sequence, Dict
+from collections import namedtuple
 
 import torch
 import torch.nn as nn
@@ -17,8 +18,15 @@ import torchvision
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
-from .__init__ import __version__
 from .branches import Branches, DirectOnly
+
+VersionInfo = namedtuple("VersionInfo", "major minor build")
+version_info = VersionInfo(
+   major=0,
+   minor=1,
+   build=3
+)
+__version__ = f"{version_info.major}.{version_info.minor}.{version_info.build}"
 
 DEV = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -242,7 +250,7 @@ class BCNLayer(nn.Module):
    def __init__(self, width: int, *,
       connections: Connections=Connections.ONE_TO_9,
       branches: Branches=DirectOnly(),
-      device: torch.device=DEV,
+      device: Optional[torch.device]=None,
       dropout: float=0.0,
       mean: float=0.0,
       std: float=0.05,
@@ -260,7 +268,7 @@ class BCNLayer(nn.Module):
       else:
          ell = (int(math.sqrt(connections.value))-1)//2
       self.ells = range(-ell, ell+1)
-      self.device = device
+      self.device = DEV if device is None else device
       self.last = last
 
       # check if the connection matrices are already available locally under ./networks/
@@ -392,7 +400,7 @@ class BCN(nn.Module):
    def __init__(self, width: int, depth: int, *,
       connections: Connections=Connections.ONE_TO_9,
       branches: Optional[Branches]=None,
-      device: torch.device=DEV,
+      device: Optional[torch.device]=None,
       mean: float=0.0,
       std: float=0.05,
       dropout: Union[Tuple[float,...],float]=0.0,
@@ -414,7 +422,7 @@ class BCN(nn.Module):
       self.save_path = None
       self.trial = None
       if verbose: print(f"Building BCN model {self.__repr__()}...")
-      self.device = device
+      self.device = DEV if device is None else device
       self.verbose = verbose
       # set up training scheme and results attributes
       self.scheme = None
@@ -638,8 +646,9 @@ class BCN(nn.Module):
       if webhook:
          total_time = round(sum(self.results.train_times) + sum(self.results.valid_times))
          epochs = f"{n} epoch" + ("s" if n != 1 else "")
+         trial = "" if self.trial else f" (trial `{self.trial}`)"
          content = (
-            f"Finished training `{repr(self)}` for {epochs}! "
+            f"Finished training `{repr(self)}`{trial} for {epochs}! "
                f"(took around {total_time} seconds total)\n"
             f"The epoch with best performance was epoch {self.results.best_epoch}:\n"
             f"* Validation loss: {round(self.results.best_valid_loss,2)}\n"
@@ -659,10 +668,11 @@ class BCN(nn.Module):
    @staticmethod
    def construct_network(
       width: int, connections: Connections, branches: Branches,
-      device: torch.device=DEV
+      device: Optional[torch.device]=None
    ) -> Dict[Tuple[int,int],torch.Tensor]:
       """Todo.
       """
+      device = DEV if device is None else device
       hw = width*width
       if connections == Connections.FULLY_CONNECTED:
          ell = (branches.width-1)//2

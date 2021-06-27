@@ -1,5 +1,5 @@
 
-from .branches import Branches, DirectOnly
+from ..branches import Branches, DirectOnly
 
 class NearestNeighbor(Branches):
    """Branches class representing nearest neighbor connections.
@@ -10,12 +10,10 @@ class NearestNeighbor(Branches):
       super().__init__(*args, **kwargs)
 
       o = self.center
-
+      
       for dx in (-1, 0, 1):
          for dy in (-1, 0, 1):
-            self.default[o+dy,o+dx] = 1/8
-
-      self.default[o,o] = 1
+            self.default[o+dy,o+dx] = 1
 
       self.normalize()
 
@@ -39,13 +37,7 @@ class NextToNN(Branches):
 
       for dx in (-2, -1, 0, 1, 2):
          for dy in (-2, -1, 0, 1, 2):
-            self.default[o+dy,o+dx] = 1/16
-
-      for dx in (-1, 0, 1):
-         for dy in (-1, 0, 1):
-            self.default[o+dy,o+dx] = 1/8
-
-      self.default[o,o] = 1
+            self.default[o+dy,o+dx] = 1
 
       self.normalize()
 
@@ -62,9 +54,10 @@ class NearestNeighborOnly(Branches):
       super().__init__(*args, **kwargs)
 
       o = self.center
+
       for dx in (-1, 0, 1):
          for dy in (-1, 0, 1):
-            self.default[o+dy,o+dx] = 1/8
+            self.default[o+dy,o+dx] = 1
 
       self.default[o,o] = 0
 
@@ -91,7 +84,7 @@ class NextToNNOnly(Branches):
 
       for dx in (-2, -1, 0, 1, 2):
          for dy in (-2, -1, 0, 1, 2):
-            self.default[o+dy,o+dx] = 1/16
+            self.default[o+dy,o+dx] = 1
 
       for dx in (-1, 0, 1):
          for dy in (-1, 0, 1):
@@ -115,11 +108,7 @@ class IndirectOnly(Branches):
 
       for dx in (-2, -1, 0, 1, 2):
          for dy in (-2, -1, 0, 1, 2):
-            self.default[o+dy,o+dx] = 1/16
-
-      for dx in (-1, 0, 1):
-         for dy in (-1, 0, 1):
-            self.default[o+dy,o+dx] = 1/8
+            self.default[o+dy,o+dx] = 1
 
       self.default[o,o] = 0
       
