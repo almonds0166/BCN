@@ -12,6 +12,8 @@ HIGH_CONTRAST = (
    "#DDAA33", # yellow
 )
 
+BAR_EPS = 0.15
+
 def plot_loss(results, title: str, height_inches: float=10, width_inches: float=10):
    """Plot model loss results.
 
@@ -28,7 +30,7 @@ def plot_loss(results, title: str, height_inches: float=10, width_inches: float=
 
    R = np.array(results) # does nothing if already a np array
    assert R.ndim in (1, 2, 3), \
-      f"results matrix should have dimension of no more than 3, yet results.ndim = {R.ndim}."
+      f"results matrix should have dimension of no more than 3, yet {R.ndim=}."
    if R.ndim == 1:
       R = np.expand_dims(R, 0)
    if R.ndim == 2:
@@ -67,22 +69,27 @@ def plot_loss(results, title: str, height_inches: float=10, width_inches: float=
 
    for i in range(h):
       for j in range(w):
-         ax = axes[i,j]
+         if w == 1:
+            ax = axes[i]
+         else:
+            ax = axes[i,j]
          ax.errorbar(
-            range(epochs),
+            np.arange(-BAR_EPS, epochs-BAR_EPS),
             train_avg[i,j],
             yerr=[train_min[i,j], train_max[i,j]],
             color=HIGH_CONTRAST[0],
             label="Train",
-            linewidth=3
+            linewidth=1.5,
+            capsize=2.3,
          )
          ax.errorbar(
-            range(epochs),
+            np.arange(BAR_EPS, epochs+BAR_EPS),
             valid_avg[i,j],
             yerr=[valid_min[i,j], valid_max[i,j]],
             color=HIGH_CONTRAST[1],
             label="Valid",
-            linewidth=3
+            linewidth=1.5,
+            capsize=2.3,
          )
          ax.set_ylim((-0.05, 2.80))
          ax.set_title(R[i,j,0].tag)
@@ -111,7 +118,7 @@ def plot_f1_scores(results, title: str, height_inches: float=10, width_inches: f
 
    R = np.array(results) # does nothing if already a np array
    assert R.ndim in (1, 2, 3), \
-      f"results matrix should have dimension of no more than 3, yet results.ndim = {R.ndim}."
+      f"results matrix should have dimension of no more than 3, yet {R.ndim=}."
    if R.ndim == 1:
       R = np.expand_dims(R, 0)
    if R.ndim == 2:
@@ -125,6 +132,9 @@ def plot_f1_scores(results, title: str, height_inches: float=10, width_inches: f
    f1_min = np.tile(float("inf"),  (h,w,epochs))
    f1_max = np.tile(float("-inf"), (h,w,epochs))
    f1_avg = np.zeros((h,w,epochs))
+   ac_min = np.tile(float("inf"),  (h,w,epochs))
+   ac_max = np.tile(float("-inf"), (h,w,epochs))
+   ac_avg = np.zeros((h,w,epochs))
    for i in range(h):
       for j in range(w):
          for e in range(epochs):
@@ -132,29 +142,48 @@ def plot_f1_scores(results, title: str, height_inches: float=10, width_inches: f
                f1_min[i,j,e] = min(f1_min[i,j,e], R[i,j,t].f1_scores[e])
                f1_max[i,j,e] = max(f1_max[i,j,e], R[i,j,t].f1_scores[e])
                f1_avg[i,j,e] += R[i,j,t].f1_scores[e]
+               ac_min[i,j,e] = min(ac_min[i,j,e], R[i,j,t].accuracies[e])
+               ac_max[i,j,e] = max(ac_max[i,j,e], R[i,j,t].accuracies[e])
+               ac_avg[i,j,e] += R[i,j,t].accuracies[e]
             f1_avg[i,j,e] /= trials
+            ac_avg[i,j,e] /= trials
             f1_min[i,j,e] = f1_avg[i,j,e] - f1_min[i,j,e]
             f1_max[i,j,e] = f1_max[i,j,e] - f1_avg[i,j,e]
+            ac_min[i,j,e] = ac_avg[i,j,e] - ac_min[i,j,e]
+            ac_max[i,j,e] = ac_max[i,j,e] - ac_avg[i,j,e]
 
    fig, axes = plt.subplots(h,w)
    fig.set_size_inches(width_inches, height_inches)
 
    for i in range(h):
       for j in range(w):
-         ax = axes[i,j]
+         if w == 1:
+            ax = axes[i]
+         else:
+            ax = axes[i,j]
          ax.errorbar(
-            range(epochs),
+            np.arange(-BAR_EPS, epochs-BAR_EPS),
+            ac_avg[i,j],
+            yerr=[ac_min[i,j], ac_max[i,j]],
+            color=HIGH_CONTRAST[1],
+            label="Accuracy",
+            linewidth=1.5,
+            capsize=2.3,
+         )
+         ax.errorbar(
+            np.arange(BAR_EPS, epochs+BAR_EPS),
             f1_avg[i,j],
             yerr=[f1_min[i,j], f1_max[i,j]],
-            color=HIGH_CONTRAST[2],
+            color=HIGH_CONTRAST[0],
             label="F1 score",
-            linewidth=3
+            linewidth=1.5,
+            capsize=2.3,
          )
          ax.set_ylim((-0.05, 1.05))
          ax.set_title(R[i,j,0].tag)
-         if j == 0: ax.set_ylabel("F1 score")
+         if j == 0: ax.set_ylabel("Score")
          if i == h-1: ax.set_xlabel("Epoch")
-         #if (i,j) == (h-1,w-1): ax.legend()
+         if (i,j) == (h-1,w-1): ax.legend()
 
    fig.suptitle(title)
    fig.tight_layout()
@@ -164,4 +193,30 @@ def plot_f1_scores(results, title: str, height_inches: float=10, width_inches: f
 
 
 if __name__ == "__main__":
-   pass
+   from pathlib import Path
+   from bcn import Results
+
+   location = "./results/"
+
+   dataset = "MNIST"
+   size = "30x30"
+
+   trials = 3
+
+   R = []
+
+   for file in Path(location).iterdir():
+      fname = file.name
+      if fname[-4:] != ".pkl": continue
+      if dataset not in fname: continue
+      if size not in fname: continue
+      print(fname)
+      r = Results()
+      r.load(location / fname)
+
+      R.append(r)
+
+   R = np.array(R).reshape((2,3,trials))
+
+   plot_loss(R, f"{size}@9 {dataset} loss ({trials} trials)")
+   plot_f1_scores(R, f"{size}@9 {dataset} scores ({trials} trials)")

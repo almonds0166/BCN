@@ -6,9 +6,9 @@ This repository contains the source code for my master's thesis project, in whic
 
 [Code documentation is currently hosted here](https://web.mit.edu/almonds/www/BCN/index.html).
 
+<!--
 ## Running locally
 
-<!--
 Follow [these instructions](https://pytorch.org/get-started/locally/) to install PyTorch locally.
 
 In a Python (3.8 or higher) virtual environment, run
@@ -22,3 +22,5 @@ pip install -e .
 * Weight perturbation
 * Add BCN method to precision, recall, etc. per label in addition to average
 * Actually work on the thesis :F
+* Are recall & accuracy the same metric here?
+* Convert BCNLayer.network to tensor!

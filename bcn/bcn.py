@@ -23,8 +23,8 @@ from .branches import Branches, DirectOnly
 VersionInfo = namedtuple("VersionInfo", "major minor build")
 version_info = VersionInfo(
    major=0,
-   minor=1,
-   build=3
+   minor=2,
+   build=16
 )
 __version__ = f"{version_info.major}.{version_info.minor}.{version_info.build}"
 
@@ -157,7 +157,7 @@ class Results:
       train_times (List[float]): List of durations, in seconds, each epoch took to train.
       valid_times (List[float]): List of durations, in seconds, each epoch took to test.
       best_valid_loss (float): Minimum encountered validation loss.
-      best_epoch (int): Epoch corresponding to the minimum validation loss.
+      best_epoch (int): Index corresponding to the minimum of `Results.valid_losses`.
       tag (str): Anything notable about the model or results. Used as plot titles when plotting.
          Set via the `BCN.train` method.
       version (str): The version of the BCN Python module that these results came from.
@@ -249,7 +249,7 @@ class BCNLayer(nn.Module):
    """
    def __init__(self, width: int, *,
       connections: Connections=Connections.ONE_TO_9,
-      branches: Branches=DirectOnly(),
+      branches: Optional[Branches]=None,
       device: Optional[torch.device]=None,
       dropout: float=0.0,
       mean: float=0.0,
@@ -262,7 +262,10 @@ class BCNLayer(nn.Module):
       self.width = width
       self.hw = self.height*self.width
       self.connections = connections
-      self.branches = branches
+      if branches is not None:
+         self.branches = branches
+      else:
+         self.branches = DirectOnly()
       if connections == Connections.FULLY_CONNECTED:
          ell = (branches.width-1)//2
       else:
@@ -506,18 +509,8 @@ class BCN(nn.Module):
       if trial: self.trial = trial
       if tag: self.results.tag = tag
 
-   def run_epoch(self) -> None:
-      """Train for one epoch.
-
-      Important:
-         Remember to set the training scheme before running this method.
-      """
-      assert self.scheme is not None, \
-         "Before training, please explicitly set this model to training mode with .train(scheme)."
-
-      # train
+   def _training_step(self) -> float:
       self.train()
-      stopwatch = time.time()
       train_loss = 0
       pbar = tqdm(self.scheme.train, desc=f"Epoch {self.results.epoch}", unit="b")
       for i, (batch, labels) in enumerate(pbar):
@@ -533,16 +526,16 @@ class BCN(nn.Module):
          self.optim.step()
       # average loss
       train_loss /= len(self.scheme.train)
-      # record training loss
+
+      # record
       self.results.train_losses.append(train_loss)
       if self.verbose:
          print(f"train_loss: {train_loss} (average)")
 
-      self.results.train_times.append(time.time() - stopwatch)
+      return train_loss
 
-      # validation loss
+   def _evaluation_step(self) -> Tuple[float,float,float,float,float]:
       self.eval()
-      stopwatch = time.time()
       valid_loss = 0
       correct = 0
       precision = 0
@@ -573,7 +566,8 @@ class BCN(nn.Module):
       precision  = precision / N
       recall     = recall / N
       f1_score   = f1_score / N
-      # record metrics
+
+      # record
       self.results.valid_losses.append(valid_loss)
       self.results.accuracies.append(accuracy)
       self.results.precisions.append(precision)
@@ -584,10 +578,10 @@ class BCN(nn.Module):
          print(f"valid_loss: {valid_loss} (average)")
 
       if valid_loss < self.results.best_valid_loss:
-         self.results.best_valid_loss = valid_loss
-         self.results.best_epoch = self.results.epoch
-         if self.verbose:
+         if self.verbose and self.results.best_valid_loss != float("inf"):
             print("Model improved!")
+         self.results.best_valid_loss = valid_loss
+         self.results.best_epoch = self.results.epoch+1
 
          # save weights if path was provided
          if self.save_path:
@@ -607,7 +601,33 @@ class BCN(nn.Module):
             if self.verbose >= 2:
                print(f"Saved weights to: {fname}")
 
+      return valid_loss, accuracy, precision, recall, f1_score
+
+   def run_epoch(self) -> None:
+      """Train for one epoch.
+
+      Important:
+         Remember to set the training scheme before running this method.
+      """
+      assert self.scheme is not None, \
+         "Before training, please explicitly set this model to training mode with .train(scheme)."
+
+      if self.results.epoch == 0:
+         stopwatch = time.time()
+         self._evaluation_step()
+         self.results.valid_times.append(time.time() - stopwatch)
+
+      # training step
+      stopwatch = time.time()
+      train_loss = self._training_step()
+      self.results.train_times.append(time.time() - stopwatch)
+
+      # evaluation step
+      stopwatch = time.time()
+      self._evaluation_step()
       self.results.valid_times.append(time.time() - stopwatch)
+
+      # prepare for next epoch
       self.results.epoch += 1
 
       # update results file if path was provided
@@ -625,8 +645,6 @@ class BCN(nn.Module):
          )
          fname = self.save_path / fname
          self.results.save(fname)
-
-      #return valid_loss
 
    def run_epochs(self, n: int, webhook: Optional[str]=None) -> None:
       """Train for some number of epochs.
@@ -708,6 +726,3 @@ class BCN(nn.Module):
                         network[ci,cj][i,j] = branches[ci,cj][o+dy,o+dx]
 
       return network
-
-if __name__ == "__main__":
-   pass

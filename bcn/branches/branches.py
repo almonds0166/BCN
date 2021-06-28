@@ -4,6 +4,15 @@ from typing import Optional, Dict, Tuple
 import torch
 import numpy as np
 
+BRANCH_NAMES = {
+   "DirectOnly": "Direct connections only",
+   "NearestNeighbor": "Nearest neighbors",
+   "NextToNN": "Next-to-nearest neighbors",
+   "NearestNeighborOnly": "Nearest neighbors only",
+   "NextToNNOnly": "Next-to-nearest neighbors only",
+   "IndirectOnly": "Next-to-nearest, except direct connections",
+}
+
 class Branches:
    """Base class representing branching connections.
 
