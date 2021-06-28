@@ -7,10 +7,9 @@ from .bcn import (
    BCNLayer,
    BCN,
    DEV,
-   version_info,
-   __version__,
 )
 from . import branches
+from .__version__ import __version__, version_info
 
 __title__ = "BCN"
 __author__ = "Madison Landry"

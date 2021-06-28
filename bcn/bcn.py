@@ -8,7 +8,6 @@ import time
 import urllib.request
 import json
 from typing import Any, Union, Optional, Tuple, List, Set, Sequence, Dict
-from collections import namedtuple
 
 import torch
 import torch.nn as nn
@@ -19,14 +18,7 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 from .branches import Branches, DirectOnly
-
-VersionInfo = namedtuple("VersionInfo", "major minor build")
-version_info = VersionInfo(
-   major=0,
-   minor=2,
-   build=16
-)
-__version__ = f"{version_info.major}.{version_info.minor}.{version_info.build}"
+from .__version__ import __version__
 
 DEV = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
