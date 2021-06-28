@@ -110,13 +110,19 @@ Inherits from `bcn.branches.Branches`.
 
 These branches have equal power in the center, first ring, and second ring, where applicable.
 
-.. automodule:: bcn.branches.simple
-   :members:
+.. autoclass:: bcn.branches.simple.NearestNeighbor
+.. autoclass:: bcn.branches.simple.NextToNN
+.. autoclass:: bcn.branches.simple.NearestNeighborOnly
+.. autoclass:: bcn.branches.simple.NextToNNOnly
+.. autoclass:: bcn.branches.simple.IndirectOnly
 
 Uniform branches
 ~~~~~~~~~~~~~~~~
 
 These branches have equal non-zero values.
 
-.. automodule:: bcn.branches.uniform
-   :members:
+.. autoclass:: bcn.branches.uniform.NearestNeighbor
+.. autoclass:: bcn.branches.uniform.NextToNN
+.. autoclass:: bcn.branches.uniform.NearestNeighborOnly
+.. autoclass:: bcn.branches.uniform.NextToNNOnly
+.. autoclass:: bcn.branches.uniform.IndirectOnly

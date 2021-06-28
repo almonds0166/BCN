@@ -16,6 +16,7 @@ venv/
 
 # documentation
 docs/build/
+docs/push-docs.bat
 
 # PyPI
 *.egg-info/
