@@ -7,4 +7,5 @@ from .simple import (
    NearestNeighbourOnly,
    NextToNNOnly,
    IndirectOnly,
+   DirectOnly,
 )

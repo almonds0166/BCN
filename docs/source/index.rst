@@ -10,6 +10,7 @@ Welcome to BCN's documentation!
    :maxdepth: 3
 
    ref
+   changelog
 
 Indices and tables
 ==================

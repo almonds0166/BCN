@@ -34,7 +34,8 @@ extensions = [
    "sphinx.ext.napoleon",
    "sphinx.ext.intersphinx",
    "sphinx.ext.autodoc",
-   "sphinx_autodoc_typehints"
+   "sphinx_autodoc_typehints",
+   "sphinx.ext.todo",
 ]
 intersphinx_mapping = {
    "python": ("https://docs.python.org/3", None),

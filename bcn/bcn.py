@@ -442,6 +442,58 @@ class BCN(nn.Module):
          f")"
       )
 
+   @property
+   def default_weights_filename(self) -> str:
+      """The way this model's weights file will be named by default.
+
+      Example:
+         ``weights_30x30x3@9-NearestNeighborOnly.MNIST.b64.t2.pt``
+
+      Note:
+         Remember to set this model's trial using `BCN.train` before accessing this property. 
+
+      This is in preparation for a possible future feature, to allow user to customize the names of
+      these files with format specifiers.
+      """
+      trial = "" if self.trial is None else f".t{self.trial}"
+      fname = (
+         f"weights"
+         f"_{self.height}x{self.width}x{self.depth}"
+         f"@{self.connections.value}"
+         f"-{self.branches.__class__.__name__}"
+         f".{self.scheme.dataset.name}"
+         f".b{self.scheme.batch_size}"
+         f"{trial}"
+         f".pt"
+      )
+      return fname
+
+   @property
+   def default_results_filename(self) -> str:
+      """The way this model's results file will be named by default.
+
+      Example:
+         ``results_30x30x3@9-DirectOnly.MNIST.b64.t2.pkl``
+
+      Note:
+         Remember to set this model's trial using `BCN.train` before accessing this property. 
+
+      This is in preparation for a possible future feature, to allow user to customize the names of
+      these files with format specifiers.
+      """
+      trial = "" if self.trial is None else f".t{self.trial}"
+      fname = (
+         f"results"
+         f"_{self.height}x{self.width}x{self.depth}"
+         f"@{self.connections.value}"
+         f"-{self.branches.__class__.__name__}"
+         f".{self.scheme.dataset.name}"
+         f".b{self.scheme.batch_size}"
+         f"{trial}"
+         f".pkl"
+      )
+      return fname
+
    def forward(self, x: torch.Tensor) -> torch.Tensor:
       """The forward computation performed at every BCN call.
 
@@ -464,6 +516,7 @@ class BCN(nn.Module):
       scheme: Optional[TrainingScheme]=None,
       from_weights: Union[Path,str,None]=None,
       from_results: Union[Path,str,None]=None,
+      from_path: Union[Path,str,None]=None,
       save_path: Union[Path,str,None]=None,
       trial: Optional[int]=None,
       tag: str=""
@@ -477,8 +530,14 @@ class BCN(nn.Module):
          scheme: The training scheme that this model should follow.
 
       Keyword args:
-         from_weights: Weights file to begin training from; default is ``None``, to initialize
-            weights randomly.
+         from_weights: Weights file to begin training from; default is to initialize weights
+            randomly.
+         from_results: Results file to load; default is not to load any results.
+         from_path: The directory that the model should look under to load the weights and results,
+            using the `BCN.default_weights_filename` and `BCN.default_results_filename` filenames.
+            In practice, this is usually identical to the ``save_path`` parameter. If either of the
+            explicit parameters ``from_weights`` or ``from_results`` are also specified, the model
+            will use those.
          trial: Assign the model a trial number, for the sake of repeating experiments. Default is
             ``None``, in which case the model isn't assigned a trial number.
          save_path: Path to save weights to.
@@ -487,18 +546,36 @@ class BCN(nn.Module):
       """
       super().train(flag)
 
+      if trial: self.trial = trial
       if scheme is not None:
          if self.verbose: print("Setting training scheme...")
          self.scheme = scheme
          self.loss_fn = nn.CrossEntropyLoss()
          self.optim = scheme.optim(self.parameters(), **scheme.optim_params)
 
-      if from_weights: self.load_state_dict(torch.load(from_weights))
-      if from_results: self.results.load(from_results)
+      # guarantee Path objects
+      if from_path is not None: from_path = Path(from_path)
+      if from_weights is not None: from_weights = Path(from_weights)
+      if from_results is not None: from_results = Path(from_results)
+
+      # infer weights/results files if provided from_path parameter
+      if from_weights is None and from_path is not None:
+         from_weights = from_path / self.default_weights_filename
+      
+      if from_results is None and from_path is not None:
+         from_results = from_path / self.default_results_filename
+
+      # load wieghts & results if anywhere specified
+      if from_weights:
+         if self.verbose: print(f"Loading weights from {from_weights}.")
+         self.load_state_dict(torch.load(from_weights))
+      if from_results:
+         if self.verbose: print(f"Continuing from results saved at {from_weights}.")
+         self.results.load(from_results)
+
       if save_path:
          self.save_path = Path(save_path)
          self.save_path.mkdir(parents=True, exist_ok=True) # mkdir as needed
-      if trial: self.trial = trial
       if tag: self.results.tag = tag
 
    def _training_step(self) -> float:
@@ -577,17 +654,7 @@ class BCN(nn.Module):
 
          # save weights if path was provided
          if self.save_path:
-            trial = "" if self.trial is None else f".t{self.trial}"
-            fname = (
-               f"weights"
-               f"_{self.height}x{self.width}x{self.depth}"
-               f"@{self.connections.value}"
-               f"-{self.branches.__class__.__name__}"
-               f".{self.scheme.dataset.name}"
-               f".b{self.scheme.batch_size}"
-               f"{trial}"
-               f".pt"
-            )
+            fname = self.default_weights_filename
             fname = self.save_path / fname
             torch.save(self.state_dict(), fname)
             if self.verbose >= 2:
@@ -624,17 +691,7 @@ class BCN(nn.Module):
 
       # update results file if path was provided
       if self.save_path:
-         trial = "" if self.trial is None else f".t{self.trial}"
-         fname = (
-            f"results"
-            f"_{self.height}x{self.width}x{self.depth}"
-            f"@{self.connections.value}"
-            f"-{self.branches.__class__.__name__}"
-            f".{self.scheme.dataset.name}"
-            f".b{self.scheme.batch_size}"
-            f"{trial}"
-            f".pkl"
-         )
+         fname = self.default_results_filename
          fname = self.save_path / fname
          self.results.save(fname)
 
@@ -680,7 +737,22 @@ class BCN(nn.Module):
       width: int, connections: Connections, branches: Branches,
       device: Optional[torch.device]=None
    ) -> Dict[Tuple[int,int],torch.Tensor]:
-      """Todo.
+      """Construct the connection matrices that determine how to pass one layer to the next.
+
+      See thesis Section ``_._._`` for more details about how this works.
+
+      Args:
+         width: The width of each BCN plane, e.g. 28.
+         connections: The number of direct connections, e.g. `~bcn.Connections.ONE_TO_9`.
+         branches: The type of branching connections, e.g. `~bcn.branches.simple.NearestNeighbor`.
+         device: The device that the torch tensors should live within. Default is to choose GPU if
+            available, otherwise CPU.
+
+      Returns:
+         Dict[Tuple[int,int],torch.Tensor]: The set of connection matrices that coordinates the
+         layer-to-layer transformation.
+
+      Todo: Instead of Python `dict` objects, use proper tensors.
       """
       device = DEV if device is None else device
       hw = width*width

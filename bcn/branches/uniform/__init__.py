@@ -7,4 +7,5 @@ from .uniform import (
    NearestNeighbourOnly,
    NextToNNOnly,
    IndirectOnly,
+   DirectOnly,
 )
