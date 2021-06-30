@@ -569,6 +569,11 @@ class BCN(nn.Module):
       if from_weights:
          if self.verbose: print(f"Loading weights from {from_weights}.")
          self.load_state_dict(torch.load(from_weights))
+         for layer in self.layers:
+            for k, v in layer.weights.items():
+               layer.weights[k] = v.to(self.device)
+            if layer.last:
+               layer.mask = layer.mask.to(self.device)
       if from_results:
          if self.verbose: print(f"Continuing from results saved at {from_weights}.")
          self.results.load(from_results)
@@ -713,7 +718,7 @@ class BCN(nn.Module):
       if webhook:
          total_time = round(sum(self.results.train_times) + sum(self.results.valid_times))
          epochs = f"{n} epoch" + ("s" if n != 1 else "")
-         trial = "" if self.trial else f" (trial `{self.trial}`)"
+         trial = "" if not self.trial else f" (trial `{self.trial}`)"
          content = (
             f"Finished training `{repr(self)}`{trial} for {epochs}! "
                f"(took around {total_time} seconds total)\n"

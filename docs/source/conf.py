@@ -61,7 +61,7 @@ html_theme = "sphinx_book_theme" # https://sphinx-themes.org/sample-sites/sphinx
 
 today = datetime.utcnow().strftime(
    "<time datetime=\"%Y-%m-%dT%H:%MZ\">" \
-   "%d %b at %H:%M UTC"
+   "%b %d at %H:%M UTC"
    "</time>"
 )
 html_theme_options = {
