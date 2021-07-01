@@ -547,11 +547,6 @@ class BCN(nn.Module):
       super().train(flag)
 
       if trial: self.trial = trial
-      if scheme is not None:
-         if self.verbose: print("Setting training scheme...")
-         self.scheme = scheme
-         self.loss_fn = nn.CrossEntropyLoss()
-         self.optim = scheme.optim(self.parameters(), **scheme.optim_params)
 
       # guarantee Path objects
       if from_path is not None: from_path = Path(from_path)
@@ -565,13 +560,15 @@ class BCN(nn.Module):
       if from_results is None and from_path is not None:
          from_results = from_path / self.default_results_filename
 
-      # load wieghts & results if anywhere specified
+      # load weights & results if anywhere specified
       if from_weights:
          if self.verbose: print(f"Loading weights from {from_weights}.")
          self.load_state_dict(torch.load(from_weights))
          for layer in self.layers:
-            for k, v in layer.weights.items():
-               layer.weights[k] = v.to(self.device)
+            for (dy,dx), v in layer.weights.items():
+               v = v.to(self.device)
+               layer.weights[(dy,dx)] = v
+               layer.register_parameter(f"({dy},{dx})", v)
             if layer.last:
                layer.mask = layer.mask.to(self.device)
       if from_results:
@@ -582,6 +579,12 @@ class BCN(nn.Module):
          self.save_path = Path(save_path)
          self.save_path.mkdir(parents=True, exist_ok=True) # mkdir as needed
       if tag: self.results.tag = tag
+      
+      if scheme is not None:
+         if self.verbose: print("Setting training scheme...")
+         self.scheme = scheme
+         self.loss_fn = nn.CrossEntropyLoss()
+         self.optim = scheme.optim(self.parameters(), **scheme.optim_params)
 
    def _training_step(self) -> float:
       self.train()
