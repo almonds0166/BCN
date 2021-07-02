@@ -1,5 +1,5 @@
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 from bcn import __version__
 
@@ -11,7 +11,7 @@ setup(
    version=__version__,
    description="Thesis code for testing branched connection networks, 2021.",
    license="MIT",
-   py_modules=["bcn"],
+   packages=find_packages(),
    classifiers=[ # https://pypi.org/classifiers/
       "Development Status :: 3 - Alpha",
       "Programming Language :: Python :: 3.7",

@@ -27,6 +27,7 @@ if __name__ == "__main__":
                connections=CONNECTIONS,
                branches=BRANCHES,
                dropout=0,
+               verbose=True,
             )
             # prepare for training
             scheme = TrainingScheme(
