@@ -554,7 +554,7 @@ class BCN(nn.Module):
          tag: Anything notable about the model or results. Intended to be used as plot titles when
             plotting.
       """
-      
+
       if scheme is not None:
          if self.verbose: print("Setting training scheme...")
          self.scheme = scheme
@@ -578,7 +578,7 @@ class BCN(nn.Module):
       # load weights & results if anywhere specified
       if from_weights:
          if self.verbose: print(f"Loading weights from {from_weights}.")
-         self.load_state_dict(torch.load(from_weights))
+         self.load_state_dict(torch.load(from_weights, map_location="cpu"))
          for layer in self.layers:
             for (dy,dx), v in layer.weights.items():
                v = v.to(self.device)
