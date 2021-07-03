@@ -455,6 +455,12 @@ class BCN(nn.Module):
       This is in preparation for a possible future feature, to allow user to customize the names of
       these files with format specifiers.
       """
+      if self.scheme is None: raise AttributeError(
+         "BCN models have no 'default_weights_filename' property until the training scheme is " \
+         "set with .train(...)."
+      )
+      # This error ^ will never quite surface, sadly
+      # https://github.com/pytorch/pytorch/issues/13981
       trial = "" if self.trial is None else f".t{self.trial}"
       fname = (
          f"weights"
@@ -481,6 +487,10 @@ class BCN(nn.Module):
       This is in preparation for a possible future feature, to allow user to customize the names of
       these files with format specifiers.
       """
+      if self.scheme is None: raise AttributeError(
+         "BCN models have no 'default_results_filename' property until the training scheme is " \
+         "set with .train(...)."
+      )
       trial = "" if self.trial is None else f".t{self.trial}"
       fname = (
          f"results"
@@ -544,6 +554,11 @@ class BCN(nn.Module):
          tag: Anything notable about the model or results. Intended to be used as plot titles when
             plotting.
       """
+      
+      if scheme is not None:
+         if self.verbose: print("Setting training scheme...")
+         self.scheme = scheme
+
       super().train(flag)
 
       if trial: self.trial = trial
@@ -581,8 +596,6 @@ class BCN(nn.Module):
       if tag: self.results.tag = tag
       
       if scheme is not None:
-         if self.verbose: print("Setting training scheme...")
-         self.scheme = scheme
          self.loss_fn = nn.CrossEntropyLoss()
          self.optim = scheme.optim(self.parameters(), **scheme.optim_params)
 
@@ -677,7 +690,7 @@ class BCN(nn.Module):
          Remember to set the training scheme before running this method.
       """
       assert self.scheme is not None, \
-         "Before training, please explicitly set this model to training mode with .train(scheme)."
+         "Before training, please explicitly set this model to training mode with .train(...)."
 
       if self.results.epoch == 0:
          stopwatch = time.time()
