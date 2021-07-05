@@ -13,6 +13,7 @@ HIGH_CONTRAST = (
 )
 
 BAR_EPS = 0.15
+ALPHA = 0.2
 
 def plot_loss(results, title: str, height_inches: float=10, width_inches: float=10):
    """Plot model loss results.
@@ -73,29 +74,39 @@ def plot_loss(results, title: str, height_inches: float=10, width_inches: float=
             ax = axes[i]
          else:
             ax = axes[i,j]
-         ax.errorbar(
-            np.arange(-BAR_EPS, epochs-BAR_EPS),
+
+         x = np.arange(-BAR_EPS, epochs-BAR_EPS)
+         ax.fill_between(
+            x,
+            train_avg[i,j]-train_min[i,j], train_avg[i,j]+train_max[i,j],
+            alpha=ALPHA,
+            color=HIGH_CONTRAST[0]
+         )
+         ax.fill_between(
+            x,
+            valid_avg[i,j]-valid_min[i,j], valid_avg[i,j]+valid_max[i,j],
+            alpha=ALPHA,
+            color=HIGH_CONTRAST[1]
+         )
+         ax.plot(
+            x,
             train_avg[i,j],
-            yerr=[train_min[i,j], train_max[i,j]],
             color=HIGH_CONTRAST[0],
             label="Train",
-            linewidth=1.5,
-            capsize=2.3,
+            linewidth=1,
          )
          ax.errorbar(
-            np.arange(BAR_EPS, epochs+BAR_EPS),
+            x,
             valid_avg[i,j],
-            yerr=[valid_min[i,j], valid_max[i,j]],
             color=HIGH_CONTRAST[1],
             label="Valid",
-            linewidth=1.5,
-            capsize=2.3,
+            linewidth=1,
          )
          ax.set_ylim((-0.05, 2.80))
          ax.set_title(R[i,j,0].tag)
          if j == 0: ax.set_ylabel("Loss")
          if i == h-1: ax.set_xlabel("Epoch")
-         if (i,j) == (h-1,w-1): ax.legend()
+         if (i,j) == (h-1,w-1): ax.legend(loc="upper right")
 
    fig.suptitle(title)
    fig.tight_layout()
@@ -161,29 +172,39 @@ def plot_f1_scores(results, title: str, height_inches: float=10, width_inches: f
             ax = axes[i]
          else:
             ax = axes[i,j]
-         ax.errorbar(
-            np.arange(-BAR_EPS, epochs-BAR_EPS),
+
+         x = np.arange(-BAR_EPS, epochs-BAR_EPS)
+         ax.fill_between(
+            x,
+            ac_avg[i,j]-ac_min[i,j], ac_avg[i,j]+ac_max[i,j],
+            alpha=ALPHA,
+            color=HIGH_CONTRAST[1]
+         )
+         ax.fill_between(
+            x,
+            f1_avg[i,j]-f1_min[i,j], f1_avg[i,j]+f1_max[i,j],
+            alpha=ALPHA,
+            color=HIGH_CONTRAST[0]
+         )
+         ax.plot(
+            x,
             ac_avg[i,j],
-            yerr=[ac_min[i,j], ac_max[i,j]],
             color=HIGH_CONTRAST[1],
             label="Accuracy",
-            linewidth=1.5,
-            capsize=2.3,
+            linewidth=1,
          )
-         ax.errorbar(
-            np.arange(BAR_EPS, epochs+BAR_EPS),
+         ax.plot(
+            x,
             f1_avg[i,j],
-            yerr=[f1_min[i,j], f1_max[i,j]],
             color=HIGH_CONTRAST[0],
             label="F1 score",
-            linewidth=1.5,
-            capsize=2.3,
+            linewidth=1,
          )
          ax.set_ylim((-0.05, 1.05))
          ax.set_title(R[i,j,0].tag)
          if j == 0: ax.set_ylabel("Score")
          if i == h-1: ax.set_xlabel("Epoch")
-         if (i,j) == (h-1,w-1): ax.legend()
+         if (i,j) == (h-1,w-1): ax.legend(loc="lower right")
 
    fig.suptitle(title)
    fig.tight_layout()
