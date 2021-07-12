@@ -50,13 +50,13 @@ class Info:
 
 LOCATION = "./results/"
 CONNECTIONS = 9
-DATASET = "MNIST"
-DATASET = Dataset(DATASET)
+DATASET = Dataset.MNIST
 
 if __name__ == "__main__":
 
-   print(f"Results for {DATASET.value} at 1-to-{CONNECTIONS} connections.\n")
-   label = f"Results{DATASET.name}at{CONNECTIONS}"
+   default_caption = f"Results for {DATASET.value} at 1-to-{CONNECTIONS} connections."
+   print(default_caption + "\n")
+   default_label = f"Results{DATASET.name}at{CONNECTIONS}"
 
    data = {}
    for file in Path(LOCATION).iterdir():
@@ -76,6 +76,8 @@ if __name__ == "__main__":
          data[entry] = {
             "f1": 0,
             "vl": float("inf"),
+            "size": f"{info.height}x{info.width}x{info.depth}",
+            "branches": branches,
          }
 
       r = Results()
@@ -84,21 +86,19 @@ if __name__ == "__main__":
       data[entry]["f1"] = max(data[entry]["f1"], r.f1_scores[r.best_epoch])
       data[entry]["vl"] = min(data[entry]["vl"], r.valid_losses[r.best_epoch])
 
-   print("\\begin{{center}}")
-   print("\\begin{{tabular}}{{ c c c }}")
+   print("\\begin{table}")
+   print("\\centering")
+   print("\\begin{tabular}{ c c c c }")
    print("\\hline")
-   print("Model & Minimum encountered validation loss & F1 score \\\\")
+   print("\\multicolumn{2}{ c }{Model} & Min valid loss & F1 score \\\\")
    print("\\hline")
    for entry in sorted(list(data.keys())):
-      print("{entry} & {vl:.3f} & {f1:.3f} \\\\".format(
-         entry=entry,
-         **data[entry]
-      ))
+      print("{size} & {branches} & {vl:.3f} & {f1:.3f} \\\\".format(**data[entry]))
    print("\\hline")
-   print("\\end{{tabular}}")
-   print("\\caption{{Insert caption!}}")
-   print("\\label{{table:{}}}".format(label))
-   print("\\end{{center}}")
+   print("\\end{tabular}")
+   print("\\caption{{{}}}".format(default_caption))
+   print("\\label{{table:{}}}".format(default_label))
+   print("\\end{table}")
 
 
 
