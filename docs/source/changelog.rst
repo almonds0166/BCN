@@ -27,10 +27,18 @@ There are two main ways to query version information about this project, `bcn.__
 
 .. _whats_new:
 
-v0.3.38
--------
+v0.4
+----
 
-Jun 29, 2021.
+New features
+~~~~~~~~~~~~
+
+- Add :ref:`bcn.branches.informed <optics_informed_branches>` module
+- Add `Fault` class
+- Add `BCN.evaluate`
+
+v0.3.38 (Jun 29, 2021)
+----------------------
 
 New features
 ~~~~~~~~~~~~

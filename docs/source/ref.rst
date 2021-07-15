@@ -37,6 +37,12 @@ Dataset
 
       .. _`Fashion-MNIST dataset`: https://github.com/zalandoresearch/fashion-mnist
 
+Fault
+~~~~~
+
+.. autoclass:: Fault
+   :members:
+
 Results
 ~~~~~~~
 
@@ -94,14 +100,10 @@ Base class
 Direct connections only
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-Inherits from `bcn.branches.Branches`.
-
 .. autoclass:: bcn.branches.DirectOnly
 
 Empirically based branches
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Inherits from `bcn.branches.Branches`.
 
 .. autoclass:: bcn.branches.Vital
 
@@ -126,3 +128,11 @@ These branches have equal non-zero values.
 .. autoclass:: bcn.branches.uniform.NearestNeighborOnly
 .. autoclass:: bcn.branches.uniform.NextToNNOnly
 .. autoclass:: bcn.branches.uniform.IndirectOnly
+
+.. _optics_informed_branches:
+
+Optics-informed branches
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: bcn.branches.informed.Kappa
+.. autoclass:: bcn.branches.informed.IndirectOnly

@@ -41,7 +41,7 @@ if __name__ == "__main__":
                scheme=scheme,
                trial=trial,
                save_path="./results/",
-               tag=f"{width}x{width}x{depth}, {BRANCHES.__class__.__name__}"
+               tag=f"{width}x{width}x{depth}, {BRANCHES.name}"
             )
             
             model.run_epochs(NUM_EPOCHS, webhook=webhook)

@@ -4,6 +4,7 @@ from .bcn import (
    Dataset,
    TrainingScheme,
    Results,
+   Fault,
    BCNLayer,
    BCN,
    DEV,

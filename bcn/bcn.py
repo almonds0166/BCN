@@ -7,6 +7,7 @@ from enum import Enum
 import time
 import urllib.request
 import json
+import random
 from typing import Any, Union, Optional, Tuple, List, Set, Sequence, Dict
 
 import torch
@@ -40,7 +41,7 @@ class Dataset(Enum):
 class TrainingScheme:
    """Class representing how a BCN model should be trained, including dataset and hyperparameters.
 
-   Args:
+   Keyword Args:
       optim: The torch Optimizer class that should be used for training. Default is `Adam with
          weight decay`_, AKA ``torch.optim.AdamW`` (note the lack of ``()``).
       dataset: The dataset to use, `Dataset.MNIST` or `Dataset.FASHION`. Default is MNIST.
@@ -197,11 +198,55 @@ class Results:
       """
       torch.save(self.__dict__, path)
 
+class Fault:
+   """Represents a set of faults in hardware.
+
+   Objects of this class can have their lengths calculated with `len`, as well as be iterated and
+   indexed to yield the underlying `torch.Tensor` `bool` masks.
+
+   Args:
+      model (`BCN`): The BCN model to construct some fault masks for.
+      proportion (float): The proportion of faulty LEDs in each layer, between 0 (default) and 1.
+
+   Keyword Arguments:
+      device: The `torch.device` object on which the tensors will be allocated. Default is GPU if
+         available, otherwise CPU.
+   """
+   def __init__(self, model, proportion=0.0, *, device: Optional[torch.device]=None):
+      if proportion < 0 or proportion > 1:
+         raise ValueError(f"proportion must be between 0 and 1, received: {proportion}")
+      self.proportion = proportion
+
+      device = DEV if device is None else device
+      layers = model.depth - 1
+      hw = model.hw
+      k = int(proportion * hw)
+
+      self.masks = []
+
+      for _ in range(layers):
+         indices = random.sample(range(hw), k=k)
+         mask = torch.ones((hw,1)).bool().to(device)
+         mask[indices] = False
+         self.masks.append(mask)
+
+   def __iter__(self):
+      for mask in self.masks:
+         yield mask
+
+   def __len__(self):
+      return len(self.masks)
+
+   def __getitem__(self, key):
+      return self.masks[key]
+
 class BCNLayer(nn.Module):
    """Represents a branched connection network layer.
 
    Args:
       width: The side length of the layer.
+
+   Keyword Args:
       connections: The number of direct connections each neuron makes. Default is 1-to-9.
       branches: The type of indirect (branching) connections used to construct the branching
          network. Default is direct connections only.
@@ -352,6 +397,8 @@ class BCN(nn.Module):
    Args:
       width: The side length of each layer.
       depth: The depth of the network, equal to the number of nonlinear activations.
+
+   Keyword Args:
       connections: The number of direct connections each neuron makes. Default is 1-to-9.
       branches: The type of indirect (branching) connections used to construct the branching
          networks for each layer. Default is direct connections only.
@@ -504,7 +551,7 @@ class BCN(nn.Module):
       )
       return fname
 
-   def forward(self, x: torch.Tensor) -> torch.Tensor:
+   def forward(self, x: torch.Tensor, *, fault: Optional[Fault]=None) -> torch.Tensor:
       """The forward computation performed at every BCN call.
 
       Note:
@@ -513,12 +560,17 @@ class BCN(nn.Module):
       Args:
          x: The input tensor of size (``features``, ``batch_size``).
 
+      Keyword Args:
+         fault: The set of fault masks to use, if any.
+
       Returns:
          The output tensor of size (10, ``batch_size``).
       """
       y = x
-      for d in range(self.depth):
-         y = self.layers[d](y) # sigmoid activation is applied, except at end
+      for i, layer in enumerate(self.layers):
+         y = layer(y) # sigmoid activation is applied, except at end
+         if not layer.last and fault is not None:
+            y = y * fault[i]
 
       return y
 
@@ -811,3 +863,57 @@ class BCN(nn.Module):
                         network[ci,cj][i,j] = branches[ci,cj][o+dy,o+dx]
 
       return network
+
+   def evaluate(self, *, valid: bool=True, fault: Optional[Fault]=None) \
+   -> Tuple[float,float,float,float,float]:
+      """Evaluate this model.
+
+      Important:
+         Remember to set the training scheme before running this method.
+
+      Keyword Args:
+         valid: Whether to use the validation set (``True``, default) or the training set
+            (``False``).
+         fault: The set of fault masks to use, if any.
+
+      Returns:
+         Tuple[float,float,float,float,float]: Loss, accuracy, precision, recall, and F1 score.
+      """
+      assert self.scheme is not None, \
+         "Before training, please explicitly set this model to training mode with .train(...)."
+
+      dset = self.scheme.valid if valid else self.scheme.train
+
+      self.eval()
+      loss_score = 0
+      correct = 0
+      precision = 0
+      recall = 0
+      f1_score = 0
+      with torch.no_grad():
+         for i, (batch, labels) in enumerate(dset):
+            # model expects batch_size as last dimension
+            batch = torch.transpose(batch, 0, 1).to(self.device)
+            labels = labels.to(self.device)
+            predictions = torch.roll(self(batch, fault=fault), -1, 1)
+            pred = torch.argmax(predictions, dim=1)
+            # loss
+            loss = self.loss_fn(predictions, labels)
+            loss_score += loss.item()
+            # accuracy
+            correct += sum(pred == labels)
+            # precision, recall, f1 score
+            p, r, f1, _ = precision_recall_fscore_support(
+               labels.cpu(), pred.cpu(), average="weighted", zero_division=0)
+            precision += p
+            recall += r
+            f1_score += f1
+      # average the metrics
+      N = len(dset)
+      loss_score = loss_score / N
+      accuracy   = correct.item() / (N*self.scheme.batch_size)
+      precision  = precision / N
+      recall     = recall / N
+      f1_score   = f1_score / N
+
+      return loss_score, accuracy, precision, recall, f1_score
