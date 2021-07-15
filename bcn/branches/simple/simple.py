@@ -11,16 +11,13 @@ class NearestNeighbor(Branches):
 
       o = self.center
 
-      for dx in (-1, 0, 1):
-         for dy in (-1, 0, 1):
-            self.default[o+dy,o+dx] = 1/8
-
+      self.default[o-1:o+2,o-1:o+2] = 1/8
       self.default[o,o] = 1
 
       self.normalize()
 
    def __repr__(self):
-      return f"{self.__class__.__name__}()"
+      return f"{self.module}.{self.__class__.__name__}()"
 
 class NearestNeighbour(NearestNeighbor):
    """Alias for ``NearestNeighbor``.
@@ -37,20 +34,14 @@ class NextToNN(Branches):
 
       o = self.center
 
-      for dx in (-2, -1, 0, 1, 2):
-         for dy in (-2, -1, 0, 1, 2):
-            self.default[o+dy,o+dx] = 1/16
-
-      for dx in (-1, 0, 1):
-         for dy in (-1, 0, 1):
-            self.default[o+dy,o+dx] = 1/8
-
+      self.default[o-2:o+3,o-2:o+3] = 1/16
+      self.default[o-1:o+2,o-1:o+2] = 1/8
       self.default[o,o] = 1
 
       self.normalize()
 
    def __repr__(self):
-      return f"{self.__class__.__name__}()"
+      return f"{self.module}.{self.__class__.__name__}()"
 
 class NearestNeighborOnly(Branches):
    """Branches class representing nearest neighbor connections without the center connection.
@@ -62,16 +53,14 @@ class NearestNeighborOnly(Branches):
       super().__init__(*args, **kwargs)
 
       o = self.center
-      for dx in (-1, 0, 1):
-         for dy in (-1, 0, 1):
-            self.default[o+dy,o+dx] = 1/8
 
+      self.default[o-1:o+2,o-1:o+2] = 1/8
       self.default[o,o] = 0
 
       self.normalize()
 
    def __repr__(self):
-      return f"{self.__class__.__name__}()"
+      return f"{self.module}.{self.__class__.__name__}()"
 
 class NearestNeighbourOnly(NearestNeighborOnly):
    """Alias for ``NearestNeighborOnly``.
@@ -89,18 +78,13 @@ class NextToNNOnly(Branches):
 
       o = self.center
 
-      for dx in (-2, -1, 0, 1, 2):
-         for dy in (-2, -1, 0, 1, 2):
-            self.default[o+dy,o+dx] = 1/16
-
-      for dx in (-1, 0, 1):
-         for dy in (-1, 0, 1):
-            self.default[o+dy,o+dx] = 0
+      self.default[o-2:o+3,o-2:o+3] = 1/16
+      self.default[o-1:o+2,o-1:o+2] = 0
 
       self.normalize()
 
    def __repr__(self):
-      return f"{self.__class__.__name__}()"
+      return f"{self.module}.{self.__class__.__name__}()"
 
 class IndirectOnly(Branches):
    """Nearest and next-to-nearest neighbor Branches class, without the center connection.
@@ -113,17 +97,11 @@ class IndirectOnly(Branches):
 
       o = self.center
 
-      for dx in (-2, -1, 0, 1, 2):
-         for dy in (-2, -1, 0, 1, 2):
-            self.default[o+dy,o+dx] = 1/16
-
-      for dx in (-1, 0, 1):
-         for dy in (-1, 0, 1):
-            self.default[o+dy,o+dx] = 1/8
-
+      self.default[o-2:o+3,o-2:o+3] = 1/16
+      self.default[o-1:o+2,o-1:o+2] = 1/8
       self.default[o,o] = 0
       
       self.normalize()
 
    def __repr__(self):
-      return f"{self.__class__.__name__}()"
+      return f"{self.module}.{self.__class__.__name__}()"

@@ -7,8 +7,10 @@ import numpy as np
 BRANCH_NAMES = {
    "DirectOnly": "Direct connections only",
    "NearestNeighbor": "Nearest neighbors",
+   "NearestNeighbour": "Nearest neighbors",
    "NextToNN": "Next-to-nearest neighbors",
    "NearestNeighborOnly": "Nearest neighbors only",
+   "NearestNeighbourOnly": "Nearest neighbors only",
    "NextToNNOnly": "Next-to-nearest neighbors only",
    "IndirectOnly": "Next-to-nearest, except direct connections",
 }
@@ -35,6 +37,8 @@ class Branches:
          that represents the indirect connections/convolution kernel.
       default (torch.Tensor): The matrix to use when an offset isn't defined in
          `Branches.connections`.
+      name (str): Formal name of the set of branches.
+      latex (str): A string of LaTeX representing the center connection as a matrix.
    """
    def __init__(self, width: int=9):
       if width % 2 == 0: raise ValueError(f"Width must be odd; {width} given.")
@@ -44,6 +48,7 @@ class Branches:
       self.connections = {}
       self.default = torch.zeros((width,width))
       self.default[self.center,self.center] = 1 # default is direct connections only
+      self.module = self.__module__.split(".")[-1]
 
    def __getitem__(self, key):
       if key in self.connections: return self.connections[key]
@@ -53,7 +58,38 @@ class Branches:
       self.connections[key] = value
 
    def __repr__(self):
-      return f"{self.__class__.__name__}(width={self.width})"
+      return f"{self.module}.{self.__class__.__name__}(width={self.width})"
+
+   def __str__(self):
+      r = repr(self)
+      try:
+         i = r.index("(")
+      except ValueError:
+         i = len(r)
+      return r[:i]
+
+   @property
+   def name(self):
+      class_name = self.__class__.__name__
+      if class_name in BRANCH_NAMES:
+         return BRANCH_NAMES[class_name]
+      else:
+         return "Custom set of branches"
+
+   @property
+   def latex(self):
+      matrix = "\\begin{matrix}\n"
+      rows = []
+      for i in range(self.width):
+         row = []
+         for j in range(self.width):
+            if self[0,0][i,j] == 0:
+               row.append("\\>")
+            else:
+               row.append(f"{self[0,0][i,j]:.2f}")
+         rows.append(" & ".join(row))
+      matrix += "\\\\\n".join(rows)
+      return matrix + "\n\\end{matrix}"
 
    def normalize(self, norm: float=1) -> None:
       """Normalize the sum of the connections to a norm.
