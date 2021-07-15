@@ -38,6 +38,7 @@ setup(
          "Sphinx==3.5.4",
          "sphinx-autodoc-typehints==1.12.0",
          "sphinx-book-theme==0.1.0",
+         "sphinxcontrib-katex==0.8.6",
          "mypy==0.910",
          "pytest==6.2.4",
          "check-manifest==0.46",

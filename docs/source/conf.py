@@ -36,6 +36,7 @@ extensions = [
    "sphinx.ext.autodoc",
    "sphinx_autodoc_typehints",
    "sphinx.ext.todo",
+   "sphinxcontrib.katex",
 ]
 intersphinx_mapping = {
    "python": ("https://docs.python.org/3", None),
