@@ -83,7 +83,7 @@ class Branches:
       for i in range(self.width):
          row = []
          for j in range(self.width):
-            if self[0,0][i,j] == 0:
+            if self[0,0][i,j] < 0.01:
                row.append("\\>")
             else:
                row.append(f"{self[0,0][i,j]:.2f}")
