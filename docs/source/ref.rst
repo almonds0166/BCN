@@ -4,6 +4,8 @@
 BCN reference
 =============
 
+.. _models:
+
 Models
 ------
 
@@ -21,6 +23,8 @@ BCNLayer
 
 Classes related to training
 ---------------------------
+
+.. _dataset:
 
 Dataset
 ~~~~~~~
@@ -55,6 +59,8 @@ TrainingScheme
 .. autoclass:: TrainingScheme
    :members:
 
+.. _connections:
+
 Connections
 -----------
 
@@ -87,6 +93,8 @@ Connections
          One of the tradeoffs I've made with how I've designed the BCN connections is intuitiveness & convenience for file sizes. Specifically, the more connected a model, the larger the connections take up in memory.
 
          More specifically, if a 30x30 1-to-9 connection scheme is 29 MB, then a 30x30 1-to-81 connection scheme would be 261 MB, and a fully connected 30x30 network would be ... 2.9 GB???
+
+.. _branches:
 
 Branches
 --------
@@ -122,6 +130,8 @@ Empirically based branches
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. autoclass:: bcn.branches.Vital
+
+.. _uniform:
 
 Uniform branches
 ~~~~~~~~~~~~~~~~

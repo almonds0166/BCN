@@ -9,6 +9,7 @@ Welcome to BCN's documentation!
 .. toctree::
    :maxdepth: 3
 
+   matchup
    ref
    changelog
 

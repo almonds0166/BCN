@@ -36,6 +36,8 @@ New features
 - Add :ref:`bcn.branches.informed <optics_informed_branches>` module
 - Add `Fault` class
 - Add `BCN.evaluate`
+- Add `bcn.branches.Branches.name` property
+- Add `bcn.branches.Branches.latex` property
 
 v0.3.38 (Jun 29, 2021)
 ----------------------
