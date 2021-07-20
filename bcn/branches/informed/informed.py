@@ -13,8 +13,8 @@ class Kappa(Branches):
       
       rings = {
          0:   jv(0, kappa)**2,
-         1: 2*jv(1, kappa)**2,
-         2: 2*jv(2, kappa)**2,
+         1: 2*jv(1, kappa)**2 / 8,
+         2: 2*jv(2, kappa)**2 / 16,
       }
       o = self.center
       for d in sorted(rings, reverse=True):
@@ -39,7 +39,10 @@ class IndirectOnly(Kappa):
       super().__init__(2.4048)
 
    def __repr__(self):
-      return f"{self.module}.{self.__class__.__name__}()"
+      return str(self) + "()"
+
+   def __str__(self):
+      return f"{self.module}.{self.__class__.__name__}"
 
    @property
    def name(self):

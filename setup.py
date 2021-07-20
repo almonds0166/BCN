@@ -1,7 +1,8 @@
 
 from setuptools import setup, find_packages
 
-from bcn import __version__
+import sys; sys.path.append("./bcn/")
+from __version__ import __version__
 
 with open("README.md", "r") as fh:
    long_description = fh.read()
