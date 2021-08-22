@@ -164,31 +164,49 @@ class TrainingScheme:
 
       return train, valid
 
+# @dataclass isn't really helpful here, actually
 class Results:
    """Class representing BCN training results.
 
    Attributes:
-      epoch (int): The number of epochs the BCN model has been trained for.
-      train_losses (List[float]): List of average training set losses acorss epochs.
-      valid_losses (List[float]): List of average validation set losses across epochs.
-      accuracies (List[float]): List of validation set accuracies across epochs.
-      precisions (List[float]): List of validation set `precision scores`_ across eopchs.
-      recalls (List[float]): List of validation set `recall scores`_ across epochs.
-      f1_scores (List[float]): List of validation set `F1 scores`_ across epochs.
-      train_times (List[float]): List of durations, in seconds, each epoch took to train.
-      valid_times (List[float]): List of durations, in seconds, each epoch took to test.
-      best_valid_loss (float): Minimum encountered validation loss.
-      best_epoch (int): Index corresponding to the minimum of `Results.valid_losses`.
-      tag (str): Anything notable about the model or results. Used as plot titles when plotting.
-         Set via the `BCN.train` method.
-      version (str): The version of the BCN Python module that these results came from.
+      epoch: The number of epochs the BCN model has been trained for.
+      train_losses: List of average training set losses across epochs.
+      valid_losses: List of average validation set losses across epochs.
+      accuracies: List of validation set accuracies across epochs.
+      precisions: List of validation set `precision scores`_ across eopchs.
+      recalls: List of validation set `recall scores`_ across epochs.
+      f1_scores: List of validation set `F1 scores`_ across epochs.
+      train_times: List of durations, in seconds, each epoch took to train.
+      valid_times: List of durations, in seconds, each epoch took to test.
+      best: Index corresponding to the maximum of `Results.f1_scores`.
+      tag: Anything notable about the model or results. Used as plot titles when plotting. Set via
+         the `BCN.train` method.
+      versions: Set of versions of the BCN Python module that these results came from.
+      devices: The set of devices this model was trained on.
+      step: The number of steps the BCN model has been weight perturbed for.
 
    .. _precision scores: https://en.wikipedia.org/wiki/Precision_and_recall
    .. _recall scores: https://en.wikipedia.org/wiki/Precision_and_recall
    .. _F1 scores: https://en.wikipedia.org/wiki/F-score
    """
+   epoch:                 int
+   step:                  int
+   train_losses:  List[float]
+   valid_losses:  List[float]
+   accuracies:    List[float]
+   precisions:    List[float]
+   recalls:       List[float]
+   f1_scores:     List[float]
+   train_times:   List[float]
+   valid_times:   List[float]
+   best:        Optional[int]
+   tag:                   str
+   versions:         Set[str]
+   devices:          Set[str]
+
    def __init__(self):
       self.epoch = 0
+      self.step = 0
       self.train_losses = []
       self.valid_losses = []
       self.accuracies = []
@@ -197,14 +215,14 @@ class Results:
       self.f1_scores = []
       self.train_times = []
       self.valid_times = []
-      self.best_valid_loss = float("inf")
-      self.best_epoch = 0
+      self.best = None
       self.tag = ""
-      self.version = __version__
+      self.versions = set()
+      self.devices = set()
 
    def __repr__(self):
       plural = self.epoch != 1
-      return f"{self.__class__.__name__}({self.epoch} epoch{'s' if plural else ''})"
+      return f"{self.__class__.__name__}<{self.epoch} epoch{'s' if plural else ''}>"
 
    def __iter__(self):
       for (k,v) in self.__dict__.items():
@@ -212,20 +230,18 @@ class Results:
 
    def load(self, path: Union[Path,str]) -> None:
       """Load results from path.
-
       Args:
          path: File path from which to load the results.
       """
-      self.__dict__ = torch.load(path)
+      self.__dict__.update(torch.load(path))
 
    def save(self, path: Union[Path,str]) -> None:
       """Save results to path.
-
       Args:
          path: File path to which to save the results.
       """
       torch.save(self.__dict__, path)
-
+      
 class Fault:
    """Represents a set of faults in hardware.
 
@@ -340,13 +356,7 @@ class BCNLayer(nn.Module):
       self.last = last
 
       # check if the connection matrices are already available locally under ./networks/
-      fname = (
-         f"{self.height}x{self.width}"
-         f"@{self.connections.value}"
-         f"-{self.branches.__class__.__name__}"
-         f".pt"
-      )
-      fname = Path("./networks/") / fname
+      fname = Path("./networks/") / self.default_network_filename
       if fname.exists():
          # yay!
          self.network = torch.load(fname, map_location=device)
@@ -361,13 +371,15 @@ class BCNLayer(nn.Module):
          # save for later
          Path("./networks/").mkdir(exist_ok=True)
          torch.save(self.network, fname)
-      # initialize weights
-      self.weights = {}
-      for dx in self.ells:
-         for dy in self.ells:
-            self.weights[dy,dx] = nn.Parameter(torch.Tensor(self.hw,1).to(device))
-            nn.init.normal_(self.weights[dy,dx], mean=mean, std=std)
-            self.register_parameter(f"({dy},{dx})", self.weights[dy,dx])
+
+      # initialize weights v1.0
+      c = self.hw if self.connections == Connections.FULLY_CONNECTED else self.connections.value
+      self.weights = nn.Parameter(
+         torch.Tensor(c, self.hw, 1, device=device)
+      )
+      nn.init.normal_(self.weights, mean=mean, std=std)
+      #self.register_parameter(f"({dy},{dx})", self.weights[dy,dx])
+
       # dropout
       self.dropout = nn.Dropout(p=dropout)
       # if last
@@ -382,10 +394,25 @@ class BCNLayer(nn.Module):
 
    def __repr__(self):
       return (
-         f"{self.__class__.__name__}("
+         f"{self.__class__.__name__}<"
          f"{self.height}x{self.width}"
          f"@{self.connections.value}-{self.branches}"
-         f")"
+         f">"
+      )
+
+   @property
+   def default_network_filename(self) -> str:
+      """The way this model's network file will be named by default.
+
+      Example:
+         ``30x30@9-uniform.NearestNeighbor.pt``
+      """
+      return (
+         f"{self.height}x{self.width}"
+         f"@{self.connections.value}"
+         f"-{self.branches}"
+         f".{self.device.type}"
+         f".pt"
       )
 
    def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -401,23 +428,21 @@ class BCNLayer(nn.Module):
          The output tensor. Size is (``features``, ``batch_size``) if this layer is not the
          last layer, otherwise (10, ``batch_size``).
       """
-      # might there be a way to vectorize this?
-      y = torch.zeros(x.size()).to(self.device)
-      for dx in self.ells:
-         for dy in self.ells:
-            y += torch.matmul(self.network[dy,dx], x * self.weights[dy, dx])
+      y = torch.matmul(self.network, x * self.weights) # (c, hw, batch_size)
+      y = y.sum(0) # (hw, batch_size)
+      y = self.dropout(y)
 
       if self.last:
          batch_size = y.size()[-1]
-         y = self.dropout(y)
          y = torch.masked_select(y, self.mask)
          y = y.reshape((10,batch_size))
          y = torch.transpose(y, 0, 1) # CrossEntropyLoss has batch first
       else:
-         y = self.dropout(y)
          y = torch.sigmoid(y)
       
       return y
+
+
 
 class BCN(nn.Module):
    """Represents a branched connection network.
@@ -634,6 +659,9 @@ class BCN(nn.Module):
          if self.verbose: print("Setting training scheme...")
          self.scheme = scheme
 
+         self.results.versions.add(__version__)
+         self.results.devices.add(str(self.device))
+
       super().train(flag)
 
       if trial: self.trial = trial
@@ -653,17 +681,11 @@ class BCN(nn.Module):
       # load weights & results if anywhere specified
       if from_weights:
          if self.verbose: print(f"Loading weights from {from_weights}.")
-         self.load_state_dict(torch.load(from_weights, map_location="cpu"))
-         for layer in self.layers:
-            for (dy,dx), v in layer.weights.items():
-               v = v.to(self.device)
-               layer.weights[(dy,dx)] = v
-               layer.register_parameter(f"({dy},{dx})", v)
-            if layer.last:
-               layer.mask = layer.mask.to(self.device)
+         self.load_state_dict(torch.load(from_weights, map_location=self.device))
       if from_results:
          if self.verbose: print(f"Continuing from results saved at {from_weights}.")
          self.results.load(from_results)
+         #self.results.devices.add(self.device.type) # FLAG
 
       if save_path:
          self.save_path = Path(save_path)
@@ -740,13 +762,14 @@ class BCN(nn.Module):
       self.results.f1_scores.append(f1_score)
 
       if self.verbose:
-         print(f"valid_loss: {valid_loss} (average)")
+         print(f"f1: {f1_score}")
 
-      if valid_loss < self.results.best_valid_loss:
-         if self.verbose and self.results.best_valid_loss != float("inf"):
+      if self.results.best is None or \
+            f1_score > self.results.f1_scores[self.results.best]:
+         if self.verbose:
             print("Model improved!")
-         self.results.best_valid_loss = valid_loss
-         self.results.best_epoch = self.results.epoch+1
+
+         self.results.best = len(self.results.f1_scores)-1
 
          # save weights if path was provided
          if self.save_path:
@@ -857,10 +880,8 @@ class BCN(nn.Module):
             available, otherwise CPU.
 
       Returns:
-         Dict[Tuple[int,int],torch.Tensor]: The set of connection matrices that coordinates the
-         layer-to-layer transformation.
-
-      Todo: Instead of Python `dict` objects, use proper tensors.
+         torch.Tensor: The 3D tensor of connections that coordinates the layer-to-layer
+         transformation.
       """
       device = DEV if device is None else device
       hw = width*width
@@ -897,10 +918,22 @@ class BCN(nn.Module):
                         # thanks to trial and error
                         network[ci,cj][i,j] = branches[ci,cj][o+dy,o+dx]
 
-      return network
+      # v1.0 lazy update (:
+      network_ = torch.zeros((connections.value, *network[0,0].shape))
+      print("network_ shape:", network_.shape)
 
-   def evaluate(self, *, valid: bool=True, fault: Optional[Fault]=None) \
-   -> Tuple[float,float,float,float,float]:
+      index = 0
+      for dy in ells:
+         for dx in ells: # PyTorch is row-major
+            network_[index,:,:] = network[dy,dx]
+            index += 1
+
+      return network_
+
+   def evaluate(self, *,
+      valid: bool=True, fault: Optional[Fault]=None, shuffle: bool=False,
+      use_tqdm: bool=True,
+   ) -> Tuple[float,float,float,float,float]:
       """Evaluate this model.
 
       Important:
@@ -910,6 +943,9 @@ class BCN(nn.Module):
          valid: Whether to use the validation set (``True``, default) or the training set
             (``False``).
          fault: The set of fault masks to use, if any.
+         shuffle: Whether to shuffle the dataset when evaluating (``True``), or not (``False``,
+            default).
+         use_tqdm: Whether to use tqdm (``True``, default) or not (``False``).
 
       Returns:
          Tuple[float,float,float,float,float]: Loss, accuracy, precision, recall, and F1 score.
@@ -917,7 +953,12 @@ class BCN(nn.Module):
       assert self.scheme is not None, \
          "Before training, please explicitly set this model to training mode with .train(...)."
 
-      dset = self.scheme.valid if valid else self.scheme.train
+      if shuffle:
+         dset = self.scheme.valid if valid else self.scheme.train
+      else:
+         dset = self.scheme._valid if valid else self.scheme._train
+
+      if use_tqdm: dset = tqdm(dset)
 
       self.eval()
       loss_score = 0
@@ -952,3 +993,141 @@ class BCN(nn.Module):
       f1_score   = f1_score / N
 
       return loss_score, accuracy, precision, recall, f1_score
+
+   def clone(self, clone_results: bool=True):
+      """Return a duplicate of this model with weight tensors separate in memory.
+
+      Arguments:
+         clone_results: Whether to clone the Results too, default ``True``.
+
+      Returns:
+         BCN: Duplicate of this model.
+      """
+      new_model = BCN(
+         self.width, self.depth,
+         connections=self.connections,
+         branches=self.branches,
+         device=self.device,
+         dropout=self.dropout,
+      )
+      for l in range(self.depth):
+         new_model.layers[l].weights = nn.Parameter(self.layers[l].weights.detach().clone())
+
+      new_model.train(trial=self.trial, tag=self.results.tag)
+      if self.scheme:
+         new_model.train(scheme=self.scheme)
+
+      if clone_results:
+         new_model.results = Results()
+         for k, v in self.results.__dict__.items():
+            if isinstance(v, (list, set)):
+               new_model.results.__dict__[k] = v.copy()
+            else:
+               new_model.results.__dict__[k] = v
+
+      new_model.verbose = self.verbose
+
+      return new_model
+
+   def run_wp(self,
+      n: int, approach: WPApproach=WPApproach.RASTER, epsilon: float=0.01,
+      fault: Optional[Fault]=None,
+   ):
+      """Run some rounds of weight perturbation.
+
+      Arguments:
+         n: The number of weight perturbation steps to perform.
+         approach: The approach to weight perturbation. Default is `WPApproach.RASTER`.
+         epsilon: Multiplicative learning rate. Default is 0.01, AKA 1%.
+         fault: The set of fault masks to use, if any.
+      """
+      def repeat(iterable):
+         while True:
+            for item in iterable: yield item
+      def repeated_random_sampler(iterable):
+         while True:
+            sample = random.sample(iterable, len(iterable))
+            for item in sample: yield item
+
+      L = len(self.layers)
+      if approach == WPApproach.RASTER:
+         layers = lambda: repeat(range(L))
+      elif approach == WPApproach.COCKTAIL:
+         layers = lambda: repeat(itertools.chain(range(L), range(L)[::-1]))
+      elif approach == WPApproach.RANDOM:
+         layers = lambda: repeated_random_sampler(range(L))
+
+      train_loss, _, _, _, _ = self.evaluate(valid=False, fault=fault, use_tqdm=True)
+      valid_loss, accuracy, precision, recall, f1_score = \
+         self.evaluate(valid=True, fault=fault, use_tqdm=False)
+
+      if self.results.step == 0:
+         self.results.train_losses.append(train_loss)
+         self.results.valid_losses.append(valid_loss)
+         self.results.accuracies.append(accuracy)
+         self.results.precisions.append(precision)
+         self.results.recalls.append(recall)
+         self.results.f1_scores.append(f1_score)
+
+      perturbed = self.clone()
+
+      for step, l in enumerate(layers(), start=1):
+         if step > n: break
+
+         if self.verbose >= 2: print(f"WP step {step}, perturbed layer {l}. Evaluating...")
+
+         # new perturbation
+         perturbation = 1 + epsilon * torch.randint(-1, +1, perturbed.layers[l].weights.size())
+         perturbed.layers[l].weights = nn.Parameter(
+            perturbed.layers[l].weights.detach().clone() * perturbation
+         )
+
+         nudged_train_loss, _, _, _, _ = \
+            perturbed.evaluate(valid=False, fault=fault, use_tqdm=True)
+
+         if nudged_train_loss < train_loss:
+            # new scores
+            if self.verbose: print("Model improved!")
+            train_loss = nudged_train_loss
+            valid_loss, accuracy, precision, recall, f1_score = \
+               self.evaluate(valid=True, fault=fault, use_tqdm=False)
+
+            # update weights
+            self.layers[l].weights = nn.Parameter(perturbed.layers[l].weights.detach().clone())
+
+            # save weights if path was provided
+            if self.save_path:
+               fname = self.default_weights_filename
+               fname = self.save_path / fname
+               torch.save(self.state_dict(), fname)
+               if self.verbose >= 2:
+                  print(f"Saved weights to: {fname}")
+         else:
+            # reset perturbation for next round
+            perturbed.layers[l].weights = nn.Parameter(self.layers[l].weights.detach().clone())
+
+         # update results
+         self.results.train_losses.append(train_loss)
+         self.results.valid_losses.append(valid_loss)
+         self.results.accuracies.append(accuracy)
+         self.results.precisions.append(precision)
+         self.results.recalls.append(recall)
+         self.results.f1_scores.append(f1_score)
+
+         self.results.step += 1
+
+         self.results.best = max(
+            range(len(self.results.f1_scores)),
+            key=lambda i: self.results.f1_scores[i]
+         )
+
+         # update results file if path was provided
+         if self.save_path:
+            fname = self.default_results_filename
+            fname = self.save_path / fname
+            self.results.save(fname)
+
+
+
+
+
