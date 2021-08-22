@@ -26,6 +26,7 @@ DEV = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 class Connections(Enum):
    """Enum class representing the number of directed connections AKA "arms".
    """
+   ONE_TO_1 = 1
    ONE_TO_9 = 9
    ONE_TO_25 = 25
    ONE_TO_49 = 49
@@ -37,6 +38,13 @@ class Dataset(Enum):
    """
    MNIST = "MNIST"
    FASHION = "Fashion-MNIST"
+
+class WPApproach(Enum):
+   """Enum class representing different approaches to weight perturbation.
+   """
+   RASTER = 0
+   COCKTAIL = 1
+   RANDOM = 2
 
 class TrainingScheme:
    """Class representing how a BCN model should be trained, including dataset and hyperparameters.
@@ -116,6 +124,26 @@ class TrainingScheme:
          lambda image: torch.reshape(image, (image.size().numel(),)) # vectorize!
       ])
 
+      # unshuffled
+      _train = DataLoader(
+         dset(self.dataset_path, download=True, train=True, transform=tr), 
+         batch_size=self.batch_size,
+         drop_last=True,
+         shuffle=False,
+         pin_memory=torch.cuda.is_available()
+      )
+      _valid = DataLoader(
+         dset(self.dataset_path, download=True, train=False, transform=tr), 
+         batch_size=self.batch_size,
+         drop_last=True,
+         shuffle=False,
+         pin_memory=torch.cuda.is_available()
+      )
+
+      self._train = _train
+      self._valid = _valid
+
+      # shuffled
       train = DataLoader(
          dset(self.dataset_path, download=True, train=True, transform=tr), 
          batch_size=self.batch_size,
@@ -472,6 +500,7 @@ class BCN(nn.Module):
       # define layers
       if isinstance(dropout, (int, float)):
          dropout = (dropout,) # convert to tuple
+      self.dropout = dropout
       self.layers = nn.ModuleList()
       for d in range(depth):
          self.layers.append(
@@ -483,10 +512,10 @@ class BCN(nn.Module):
 
    def __repr__(self):
       return (
-         f"{self.__class__.__name__}("
+         f"{self.__class__.__name__}<"
          f"{self.height}x{self.width}x{self.depth}"
          f"@{self.connections.value}-{self.branches}"
-         f")"
+         f">"
       )
 
    @property
@@ -498,9 +527,6 @@ class BCN(nn.Module):
 
       Note:
          Remember to set this model's trial using `BCN.train` before accessing this property. 
-
-      This is in preparation for a possible future feature, to allow user to customize the names of
-      these files with format specifiers.
       """
       if self.scheme is None: raise AttributeError(
          "BCN models have no 'default_weights_filename' property until the training scheme is " \
@@ -530,9 +556,6 @@ class BCN(nn.Module):
 
       Note:
          Remember to set this model's trial using `BCN.train` before accessing this property. 
-
-      This is in preparation for a possible future feature, to allow user to customize the names of
-      these files with format specifiers.
       """
       if self.scheme is None: raise AttributeError(
          "BCN models have no 'default_results_filename' property until the training scheme is " \
@@ -784,20 +807,32 @@ class BCN(nn.Module):
 
       # webhook code
       if webhook:
-         total_time = round(sum(self.results.train_times) + sum(self.results.valid_times))
+         total_seconds = round(sum(self.results.train_times) + sum(self.results.valid_times))
+         minutes = total_seconds // 60
          epochs = f"{n} epoch" + ("s" if n != 1 else "")
-         trial = "" if not self.trial else f" (trial `{self.trial}`)"
-         content = (
-            f"Finished training `{repr(self)}`{trial} for {epochs}! "
-               f"(took around {total_time} seconds total)\n"
-            f"The epoch with best performance was epoch {self.results.best_epoch}:\n"
-            f"* Validation loss: {round(self.results.best_valid_loss,2)}\n"
-            f"* F1 score: {round(self.results.f1_scores[self.results.best_epoch],3)}\n"
-         )
          if "hooks.slack.com" in webhook:
-            payload = {"text": content} # slack
+            trial = "" if not self.trial else f" (trial *{self.trial}*)"
+            payload = {
+               "text": (
+                  f"Finished training *{repr(self)}*{trial} for {epochs}! "
+                     f"(took around {minutes} minutes)\n"
+                  f"The epoch with best performance was epoch {self.results.best}:\n"
+                  f"* Validation loss: *{self.results.valid_losses[self.results.best]:.2f}*\n"
+                  f"* F1 score: *{100*self.results.f1_scores[self.results.best]:.2f}%*\n"
+               )
+            } # slack
          else:
-            payload = {"content": content} # discord
+            trial = "" if not self.trial else f" (trial `{self.trial}`)"
+            payload = {
+               "content": (
+                  f"Finished training `{repr(self)}`{trial} for {epochs}! "
+                     f"(took around {minutes} minutes)\n"
+                  f"The epoch with best performance was epoch {self.results.best}:\n"
+                  f"> __Validation loss__: "
+                     f"**{self.results.valid_losses[self.results.best]:.2f}**\n"
+                  f"> __F1 score__: **{100*self.results.f1_scores[self.results.best]:.2f}%**\n"
+               )
+            } # discord
          data = json.dumps(payload).encode("utf-8")
          req = urllib.request.Request(webhook)
          req.add_header("Content-Type", "application/json; charset=utf-8")
