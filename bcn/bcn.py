@@ -184,6 +184,7 @@ class Results:
       versions: Set of versions of the BCN Python module that these results came from.
       devices: The set of devices this model was trained on.
       step: The number of steps the BCN model has been weight perturbed for.
+      wp_layers: The order of the layers that were perturbed.
 
    .. _precision scores: https://en.wikipedia.org/wiki/Precision_and_recall
    .. _recall scores: https://en.wikipedia.org/wiki/Precision_and_recall
@@ -203,6 +204,7 @@ class Results:
    tag:                   str
    versions:         Set[str]
    devices:          Set[str]
+   wp_layers:       List[int]
 
    def __init__(self):
       self.epoch = 0
@@ -219,6 +221,7 @@ class Results:
       self.tag = ""
       self.versions = set()
       self.devices = set()
+      self.wp_layers = []
 
    def __repr__(self):
       plural = self.epoch != 1
@@ -659,9 +662,6 @@ class BCN(nn.Module):
          if self.verbose: print("Setting training scheme...")
          self.scheme = scheme
 
-         self.results.versions.add(__version__)
-         self.results.devices.add(str(self.device))
-
       super().train(flag)
 
       if trial: self.trial = trial
@@ -691,6 +691,9 @@ class BCN(nn.Module):
          self.save_path = Path(save_path)
          self.save_path.mkdir(parents=True, exist_ok=True) # mkdir as needed
       if tag: self.results.tag = tag
+
+      self.results.versions.add(__version__)
+      self.results.devices.add(str(self.device))
       
       if scheme is not None:
          self.loss_fn = nn.CrossEntropyLoss()
@@ -932,7 +935,7 @@ class BCN(nn.Module):
 
    def evaluate(self, *,
       valid: bool=True, fault: Optional[Fault]=None, shuffle: bool=False,
-      use_tqdm: bool=True,
+      use_tqdm: bool=True, limit: int=60000,
    ) -> Tuple[float,float,float,float,float]:
       """Evaluate this model.
 
@@ -946,19 +949,26 @@ class BCN(nn.Module):
          shuffle: Whether to shuffle the dataset when evaluating (``True``), or not (``False``,
             default).
          use_tqdm: Whether to use tqdm (``True``, default) or not (``False``).
+         limit: The maximum size of the dataset to evaluate on. Default is 60000.
 
       Returns:
          Tuple[float,float,float,float,float]: Loss, accuracy, precision, recall, and F1 score.
       """
       assert self.scheme is not None, \
-         "Before training, please explicitly set this model to training mode with .train(...)."
+         "Before evaluating, please explicitly set this model to training mode with .train(...)."
 
       if shuffle:
          dset = self.scheme.valid if valid else self.scheme.train
       else:
          dset = self.scheme._valid if valid else self.scheme._train
 
-      if use_tqdm: dset = tqdm(dset)
+      if valid:
+         limit = min(10000, limit)
+      else:
+         limit = min(60000, limit)
+      max_batches = int(limit / self.scheme.batch_size)
+
+      if use_tqdm: dset = tqdm(dset, total=max_batches)
 
       self.eval()
       loss_score = 0
@@ -984,6 +994,7 @@ class BCN(nn.Module):
             precision += p
             recall += r
             f1_score += f1
+            if i >= max_batches: break
       # average the metrics
       N = len(dset)
       loss_score = loss_score / N
@@ -1031,7 +1042,7 @@ class BCN(nn.Module):
 
    def run_wp(self,
       n: int, approach: WPApproach=WPApproach.RASTER, epsilon: float=0.01,
-      fault: Optional[Fault]=None,
+      fault: Optional[Fault]=None, webhook: Optional[str]=None,
    ):
       """Run some rounds of weight perturbation.
 
@@ -1040,7 +1051,13 @@ class BCN(nn.Module):
          approach: The approach to weight perturbation. Default is `WPApproach.RASTER`.
          epsilon: Multiplicative learning rate. Default is 0.01, AKA 1%.
          fault: The set of fault masks to use, if any.
+         webhook: The Discord or Slack webhook URL to post to.
       """
+      assert self.scheme is not None, (
+         "Before weight perturbing, please explicitly set this model to training mode with "
+         ".train(...)."
+      )
+
       def repeat(iterable):
          while True:
             for item in iterable: yield item
@@ -1057,7 +1074,10 @@ class BCN(nn.Module):
       elif approach == WPApproach.RANDOM:
          layers = lambda: repeated_random_sampler(range(L))
 
-      train_loss, _, _, _, _ = self.evaluate(valid=False, fault=fault, use_tqdm=True)
+      start = time.time()
+
+      print(f"WP step 0, evaluating initial model...")
+      train_loss, _, _, _, _ = self.evaluate(valid=False, fault=fault, use_tqdm=True, limit=10000)
       valid_loss, accuracy, precision, recall, f1_score = \
          self.evaluate(valid=True, fault=fault, use_tqdm=False)
 
@@ -1083,7 +1103,7 @@ class BCN(nn.Module):
          )
 
          nudged_train_loss, _, _, _, _ = \
-            perturbed.evaluate(valid=False, fault=fault, use_tqdm=True)
+            perturbed.evaluate(valid=False, fault=fault, use_tqdm=True, limit=10000)
 
          if nudged_train_loss < train_loss:
             # new scores
@@ -1114,6 +1134,7 @@ class BCN(nn.Module):
          self.results.recalls.append(recall)
          self.results.f1_scores.append(f1_score)
 
+         self.results.wp_layers.append(l)
          self.results.step += 1
 
          self.results.best = max(
@@ -1126,6 +1147,36 @@ class BCN(nn.Module):
             fname = self.default_results_filename
             fname = self.save_path / fname
             self.results.save(fname)
+
+      end = time.time()
+
+      # webhook code
+      if webhook:
+         total_seconds = int(end - start)
+         minutes = total_seconds // 60
+         steps = f"{n} step" + ("s" if n != 1 else "")
+         if "hooks.slack.com" in webhook:
+            trial = "" if not self.trial else f" (trial *{self.trial}*)"
+            payload = {
+               "text": (
+                  f"Finished weight perturbing *{repr(self)}*{trial} for {steps}! "
+                     f"(took around {minutes} minutes)\n"
+               )
+            } # slack
+         else:
+            trial = "" if not self.trial else f" (trial `{self.trial}`)"
+            payload = {
+               "content": (
+                  f"Finished weight perturbing `{repr(self)}`{trial} for {steps}! "
+                     f"(took around {minutes} minutes)\n"
+               )
+            } # discord
+         data = json.dumps(payload).encode("utf-8")
+         req = urllib.request.Request(webhook)
+         req.add_header("Content-Type", "application/json; charset=utf-8")
+         req.add_header("User-Agent", "Almonds/0.0")
+         req.add_header("Content-Length", len(data))
+         response = urllib.request.urlopen(req, data)
 
 
 

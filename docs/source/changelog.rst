@@ -27,6 +27,21 @@ There are two main ways to query version information about this project, `bcn.__
 
 .. _whats_new:
 
+v1.1.20 (Aug 22, 2022)
+----------------------
+
+New features
+~~~~~~~~~~~~
+
+- Add ``limit`` parameter to `BCN.evaluate`. `BCN.run_wp` limits the training set evaluation to 10,000 samples instead of 60,000, in the interest of training times.
+- Add ``webhook`` parameter to `BCN.run_wp`.
+- Add `Results.wp_layers` to keep track of which layers were perturbed.
+
+Bug fixes
+~~~~~~~~~
+
+- `BCN.train` now appropriately adds version & device info to `BCN.results`.
+
 v1.0.257 (Aug 21, 2021)
 -----------------------
 
@@ -45,7 +60,11 @@ Breaking changes
 - Change BCN network matrices
    - Harness the power of 4D batch tensors and vectorization for (marginally?) improved training times!
    - Encode the used device in the local filename to prevent device-related errors.
-   - Fix serious bug where the local networks filename wasn't specific enough (e.g. it now writes ``uniform.NextToNN`` instead of just ``NextToNN``).
+
+Bug fixes
+~~~~~~~~~
+
+- Fix local networks filenames weren't specific (e.g. it now writes ``uniform.NextToNN`` instead of just ``NextToNN``).
 
 New features
 ~~~~~~~~~~~~

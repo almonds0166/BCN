@@ -110,6 +110,7 @@ def migrate_results(
 
    # no weight perturbation yet
    r_.step = 0
+   r_.wp_layers = []
 
    if new_filename is None: new_filename = Path(filename)
 
