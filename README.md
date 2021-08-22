@@ -2,7 +2,7 @@
 
 **Madison Landry**
 
-This repository contains the source code for my master's thesis project, in which I investigate an abstraction of sparse neural networks called branched connection networks (BCNs) that appear in [neuromorphic hardware](https://en.wikipedia.org/wiki/Neuromorphic_engineering), particularly optics-based neuromorphic hardware, to uncover strategies to better train these networks and devices.
+This repository contains the source code for my master's thesis project (**ETA: December 2021**), in which I investigate an abstraction of sparse neural networks called branched connection networks (BCNs) that appear in [neuromorphic hardware](https://en.wikipedia.org/wiki/Neuromorphic_engineering), particularly optics-based neuromorphic hardware, to uncover strategies to better train these networks and devices.
 
 [Code documentation is currently hosted here](https://web.mit.edu/almonds/www/BCN/index.html).
 
