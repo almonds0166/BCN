@@ -19,13 +19,52 @@ There are two main ways to query version information about this project, `bcn.__
 
    - ``minor`` is a minor release, representing some new features on the given major release and hopefully minimal breaking changes.
 
-   - ``build`` is a counter that loosely represents each build, revision, commit, docs build, or even file save for the given minor release.
+   - ``build`` is a counter that loosely corresponds to the amount of times I saved any file in the project for the given minor release.
 
 .. data:: __version__
 
    A string representation of the version. e.g. ``"1.1.23"``.
 
 .. _whats_new:
+
+v1.0.257 (Aug 21, 2021)
+-----------------------
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+
+- Change `Results` class
+   - When loading from a file, *update* ``Results.__dict__`` instead of entirely *replacing* it, in the interest of backward- and forward-compatibility.
+   - Remove ``Results.best_epoch``.
+   - Remove ``Results.best_valid_loss``.
+   - Remove ``Results.version``.
+   - Add `~Results.best`, representing the index of the *maximum F-1 score* (instead of minimum validation loss).
+   - Add `~Results.versions`, a set containing all the versions that the model was trained under.
+   - Add `~Results.devices`, a set containing all the devices the model was trained on, to help put training times into perspective.
+   - Add `~Results.step`, the number of weight perturbation steps
+- Change BCN network matrices
+   - Harness the power of 4D batch tensors and vectorization for (marginally?) improved training times!
+   - Encode the used device in the local filename to prevent device-related errors.
+   - Fix serious bug where the local networks filename wasn't specific enough (e.g. it now writes ``uniform.NextToNN`` instead of just ``NextToNN``).
+
+New features
+~~~~~~~~~~~~
+
+- Add `BCN.run_wp` method to run weight perturbation!
+- Add `BCN.clone` method to duplicate a model.
+- Add `BCN.evaluate` to evaluate models without training them.
+- Add `WPApproach` enum.
+- Add `Connections.ONE_TO_1`.
+- Add missing `BCN.dropout`.
+
+Migrating
+~~~~~~~~~
+
+See the :ref:`migration page <migration_1>` for more detailed info.
+
+- Use `bcn.v0.migrate_results` to convert a v0 Results file to a v1 Results file.
+- Use `bcn.v0.migrate_weights` to convert a v0 weights file to a v1 weights file.
+- Delete the contents of the local ./networks/ folder
 
 v0.4.98 (Jul 20, 2021)
 ----------------------

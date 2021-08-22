@@ -12,6 +12,7 @@ Welcome to BCN's documentation!
    matchup
    ref
    changelog
+   migration
 
 Indices and tables
 ==================

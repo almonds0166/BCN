@@ -61,10 +61,31 @@ TrainingScheme
 
 .. _connections:
 
+WPApproach
+~~~~~~~~~~
+
+.. autoclass:: WPApproach
+
+   .. attribute:: WPApproach.RASTER
+
+      Represents perturbing the layers in order from input to output, then repeating, suggestive of raster data structures.
+
+   .. attribute:: WPApproach.COCKTAIL
+
+      Represents perturbing the layers  first from input to output, then from output to input, then repeating, suggestive of cocktail shakers.
+
+   .. attribute:: WPApproach.RANDOM
+
+      Represents choosing the next layer to perturb randomly.
+
 Connections
 -----------
 
 .. autoclass:: Connections
+
+   .. attribute:: Connections.ONE_TO_1
+
+      Represents a connection scheme in which each neuron in the input plane directly connects only to the nearest neuron in the next layer.
 
    .. attribute:: Connections.ONE_TO_9
 
