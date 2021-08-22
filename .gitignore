@@ -22,3 +22,6 @@ docs/push-docs.bat
 *.egg-info/
 dist/
 build/
+
+# Platform specific
+.DS_Store
