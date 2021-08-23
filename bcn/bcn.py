@@ -722,7 +722,7 @@ class BCN(nn.Module):
          self.loss_fn = nn.CrossEntropyLoss()
          self.optim = scheme.optim(self.parameters(), **scheme.optim_params)
 
-   def _training_step(self) -> float:
+   def _training_step(self, fault=None) -> float:
       self.train()
       train_loss = 0
       pbar = tqdm(self.scheme.train, desc=f"Epoch {self.results.epoch}", unit="b")
@@ -731,7 +731,7 @@ class BCN(nn.Module):
          batch = torch.transpose(batch, 0, 1).to(self.device)
          labels = labels.to(self.device)
          self.optim.zero_grad()
-         predictions = torch.roll(self(batch), -1, 1) # keypad fix, see Section _._._
+         predictions = torch.roll(self(batch, fault=fault), -1, 1) # keypad fix, see Section _._._
          loss = self.loss_fn(predictions, labels)
          train_loss += loss.item()
          if i % 10 == 0: pbar.set_postfix(loss=f"{loss.item():.2f}")
@@ -747,7 +747,7 @@ class BCN(nn.Module):
 
       return train_loss
 
-   def _evaluation_step(self) -> Tuple[float,float,float,float,float]:
+   def _evaluation_step(self, fault=None) -> Tuple[float,float,float,float,float]:
       self.eval()
       valid_loss = 0
       correct = 0
@@ -759,7 +759,7 @@ class BCN(nn.Module):
             # model expects batch_size as last dimension
             batch = torch.transpose(batch, 0, 1).to(self.device)
             labels = labels.to(self.device)
-            predictions = torch.roll(self(batch), -1, 1)
+            predictions = torch.roll(self(batch, fault=fault), -1, 1)
             pred = torch.argmax(predictions, dim=1)
             # loss
             loss = self.loss_fn(predictions, labels)
@@ -807,7 +807,7 @@ class BCN(nn.Module):
 
       return valid_loss, accuracy, precision, recall, f1_score
 
-   def run_epoch(self) -> None:
+   def run_epoch(self, fault=None) -> None:
       """Train for one epoch.
 
       Important:
@@ -818,17 +818,17 @@ class BCN(nn.Module):
 
       if self.results.epoch == 0:
          stopwatch = time.time()
-         self._evaluation_step()
+         self._evaluation_step(fault=fault)
          self.results.valid_times.append(time.time() - stopwatch)
 
       # training step
       stopwatch = time.time()
-      train_loss = self._training_step()
+      train_loss = self._training_step(fault=fault)
       self.results.train_times.append(time.time() - stopwatch)
 
       # evaluation step
       stopwatch = time.time()
-      self._evaluation_step()
+      self._evaluation_step(fault=fault)
       self.results.valid_times.append(time.time() - stopwatch)
 
       # prepare for next epoch
@@ -840,7 +840,7 @@ class BCN(nn.Module):
          fname = self.save_path / fname
          self.results.save(fname)
 
-   def run_epochs(self, n: int, webhook: Optional[str]=None) -> None:
+   def run_epochs(self, n: int, webhook: Optional[str]=None, fault: Fault=None) -> None:
       """Train for some number of epochs.
 
       Args:
@@ -852,7 +852,7 @@ class BCN(nn.Module):
       if n <= 0: return
 
       for e in range(n):
-         self.run_epoch()
+         self.run_epoch(fault=fault)
 
       # webhook code
       if webhook:
