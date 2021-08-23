@@ -1,4 +1,5 @@
 
+import torch
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -15,7 +16,10 @@ HIGH_CONTRAST = (
 BAR_EPS = 0.15
 ALPHA = 0.2
 
-def plot_loss(results, title: str, height_inches: float=10, width_inches: float=10):
+def plot_loss(results, title: str,
+   height_inches: float=10, width_inches: float=10,
+   titles=None,
+):
    """Plot model loss results.
 
    Args:
@@ -23,6 +27,8 @@ def plot_loss(results, title: str, height_inches: float=10, width_inches: float=
       title: Overal figure title.
       height_inches: Height of figure, in inches.
       width_inches: Width of figure, in inches.
+      titles: List of subplot titles to replace the results tags. An element of None will use the
+         results tag if available. Must be in the same shape as the subplots.
 
    Returns:
       plt.
@@ -103,17 +109,42 @@ def plot_loss(results, title: str, height_inches: float=10, width_inches: float=
             linewidth=1,
          )
          ax.set_ylim((-0.05, 2.80))
-         ax.set_title(R[i,j,0].tag)
+         if titles is not None and titles[i,j] is not None:
+            ax.set_title(titles[i,j])
+         else:
+            ax.set_title(R[i,j,0].tag)
+         ax.grid(color="lightgray", ls="--")
+         # text annotations
+         full = len(valid_avg[i,j])-1
+         half = full // 2
+
+         s = f"{valid_avg[i,j][half]:.3f}"
+         ax.text(
+            half, valid_avg[i,j][half]+valid_max[i,j][half]+0.15, s,
+            ha="center",
+            va="center",
+            color="gray",
+         )
+         s = f"{valid_avg[i,j][full]:.3f}"
+         ax.text(
+            full, valid_avg[i,j][full]+valid_max[i,j][full]+0.15, s,
+            ha="center",
+            va="center",
+         )
+         # labels
          if j == 0: ax.set_ylabel("Loss")
          if i == h-1: ax.set_xlabel("Epoch")
          if (i,j) == (h-1,w-1): ax.legend(loc="upper right")
 
    fig.suptitle(title)
-   fig.tight_layout()
+   #fig.tight_layout()
 
    return plt.show()
 
-def plot_f1_scores(results, title: str, height_inches: float=10, width_inches: float=10):
+def plot_f1_scores(results, title: str,
+   height_inches: float=10, width_inches: float=10,
+   titles=None,
+):
    """Plot model F1 scores of results.
 
    Args:
@@ -121,6 +152,8 @@ def plot_f1_scores(results, title: str, height_inches: float=10, width_inches: f
       title: Overal figure title.
       height_inches: Height of figure, in inches.
       width_inches: Width of figure, in inches.
+      titles: List of subplot titles to replace the results tags. An element of None will use the
+         results tag if available. Must be in the same shape as the subplots.
 
    Returns:
       plt.
@@ -173,7 +206,7 @@ def plot_f1_scores(results, title: str, height_inches: float=10, width_inches: f
          else:
             ax = axes[i,j]
 
-         x = np.arange(-BAR_EPS, epochs-BAR_EPS)
+         x = np.arange(1-BAR_EPS, 1+epochs-BAR_EPS)
          ax.fill_between(
             x,
             ac_avg[i,j]-ac_min[i,j], ac_avg[i,j]+ac_max[i,j],
@@ -200,44 +233,64 @@ def plot_f1_scores(results, title: str, height_inches: float=10, width_inches: f
             label="F1 score",
             linewidth=1,
          )
-         ax.set_ylim((-0.05, 1.05))
-         ax.set_title(R[i,j,0].tag)
+         ax.set_ylim((-0.05, 1.075))
+         if titles is not None and titles[i,j] is not None:
+            ax.set_title(titles[i,j])
+         else:
+            ax.set_title(R[i,j,0].tag)
+         ax.grid(color="lightgray", ls="--")
+         # text annotations
+         full = len(f1_avg[i,j])-1
+         half = full // 2
+
+         s = f"{100*f1_avg[i,j][half]:.1f}%"
+         ax.text(
+            half, f1_avg[i,j][half]+f1_max[i,j][half]+0.05, s,
+            ha="center",
+            va="center",
+            color="gray",
+         )
+         s = f"{100*f1_avg[i,j][full]:.1f}%"
+         ax.text(
+            full, f1_avg[i,j][full]+f1_max[i,j][full]+0.05, s,
+            ha="center",
+            va="center",
+         )
+         # labels
          if j == 0: ax.set_ylabel("Score")
          if i == h-1: ax.set_xlabel("Epoch")
          if (i,j) == (h-1,w-1): ax.legend(loc="lower right")
 
    fig.suptitle(title)
-   fig.tight_layout()
+   #fig.tight_layout()
 
    return plt.show()
 
+def plot_fault(fault, save_file=None):
+   """Plots a fault mask.
 
+   Args:
+      save_file: Where to save the plot to.
+   """
+   N = len(fault)
+   hw = torch.numel(fault[0])
+   w = int(np.sqrt(hw))
+   fig, axes = plt.subplots(1,N, figsize=(4*N,4))
+   for i, mask in enumerate(fault):
+      ax = axes[i]
+      ax.imshow(mask.reshape((w,w)), cmap="Greys_r")
+      ax.set_xticks(tuple())
+      ax.set_yticks(tuple())
+      ax.set_xticks(np.arange(-.5, w, 1), minor=True)
+      ax.set_yticks(np.arange(-.5, w, 1), minor=True)
+      ax.grid(which="minor", color="lightgray", linestyle=":")
+
+   if save_file:
+      plt.savefig(save_file)
+   else:
+      return plt.show()
 
 if __name__ == "__main__":
-   from pathlib import Path
-   from bcn import Results
-
-   location = "./results/"
-
-   dataset = "MNIST"
-   size = "30x30"
-
-   trials = 3
-
-   R = []
-
-   for file in Path(location).iterdir():
-      fname = file.name
-      if fname[-4:] != ".pkl": continue
-      if dataset not in fname: continue
-      if size not in fname: continue
-      print(fname)
-      r = Results()
-      r.load(location / fname)
-
-      R.append(r)
-
-   R = np.array(R).reshape((2,3,trials))
-
-   plot_loss(R, f"{size}@9 {dataset} loss ({trials} trials)")
-   plot_f1_scores(R, f"{size}@9 {dataset} scores ({trials} trials)")
+   from bcn import Fault
+   fault = Fault(width=30,depth=6,padding=1, proportion=0.01)
+   plot_fault(fault)

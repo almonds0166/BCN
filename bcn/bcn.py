@@ -248,34 +248,57 @@ class Results:
 class Fault:
    """Represents a set of faults in hardware.
 
-   Objects of this class can have their lengths calculated with `len`, as well as be iterated and
-   indexed to yield the underlying `torch.Tensor` `bool` masks.
-
-   Args:
-      model (`BCN`): The BCN model to construct some fault masks for.
-      proportion (float): The proportion of faulty LEDs in each layer, between 0 (default) and 1.
+   Note:
+      Objects of this class can have their lengths calculated with `len`, as well as be iterated
+      and indexed to yield the underlying `torch.Tensor` `bool` masks.
 
    Keyword Arguments:
+      model (`BCN`): The BCN model to construct some fault masks for. If this argument is supplied,
+         the width, depth, and padding arguments are not necessary and are otherwise ignored.
+      width: The final width of the fault masks.
+      depth: The depth of the BCN model that this set of fault masks will be used with.
+      proportion (float): The proportion of faulty LEDs in each layer, between 0 (default) and 1.
       device: The `torch.device` object on which the tensors will be allocated. Default is GPU if
          available, otherwise CPU.
+      padding: The number of rings of the padding value to add around the outside of each fault
+         mask. Default value is 0, to add no padding.
    """
-   def __init__(self, model, proportion=0.0, *, device: Optional[torch.device]=None):
+   def __init__(self, *, model=None, width: int=None, depth: int=None, padding: int=0,
+      proportion: float=0.0, device: Optional[torch.device]=None
+   ):
       if proportion < 0 or proportion > 1:
          raise ValueError(f"proportion must be between 0 and 1, received: {proportion}")
       self.proportion = proportion
 
+      if model:
+         width = model.width
+         depth = model.depth
+         padding = model.padding
+
+      self.padding = padding
+
+      hw = width*width
+
+      inner_h = width - 2*padding
+      inner_hw = inner_h*inner_h
+
       device = DEV if device is None else device
-      layers = model.depth - 1
-      hw = model.hw
-      k = int(proportion * hw)
+      layers = depth - 1
+      k = int(proportion * inner_hw)
 
       self.masks = []
 
       for _ in range(layers):
-         indices = random.sample(range(hw), k=k)
-         mask = torch.ones((hw,1)).bool().to(device)
-         mask[indices] = False
-         self.masks.append(mask)
+         indices = random.sample(range(inner_hw), k=k)
+
+         inner = torch.ones((inner_hw,1)).bool().to(device)
+         inner[indices] = False
+         inner = inner.reshape((inner_h, inner_h))
+
+         mask = torch.ones((width,width)).bool().to(device)
+         mask[padding:padding+inner_h,padding:padding+inner_h] = inner
+
+         self.masks.append(mask.reshape((hw,1)))
 
    def __iter__(self):
       for mask in self.masks:
@@ -923,7 +946,7 @@ class BCN(nn.Module):
 
       # v1.0 lazy update (:
       network_ = torch.zeros((connections.value, *network[0,0].shape))
-      print("network_ shape:", network_.shape)
+      #print("network_ shape:", network_.shape)
 
       index = 0
       for dy in ells:
@@ -996,7 +1019,8 @@ class BCN(nn.Module):
             f1_score += f1
             if i >= max_batches: break
       # average the metrics
-      N = len(dset)
+      #N = len(dset)
+      N = max_batches
       loss_score = loss_score / N
       accuracy   = correct.item() / (N*self.scheme.batch_size)
       precision  = precision / N
@@ -1091,6 +1115,8 @@ class BCN(nn.Module):
 
       perturbed = self.clone()
 
+      improvements = 0
+
       for step, l in enumerate(layers(), start=1):
          if step > n: break
 
@@ -1108,6 +1134,7 @@ class BCN(nn.Module):
          if nudged_train_loss < train_loss:
             # new scores
             if self.verbose: print("Model improved!")
+            improvements += 1
             train_loss = nudged_train_loss
             valid_loss, accuracy, precision, recall, f1_score = \
                self.evaluate(valid=True, fault=fault, use_tqdm=False)
@@ -1161,6 +1188,7 @@ class BCN(nn.Module):
                "text": (
                   f"Finished weight perturbing *{repr(self)}*{trial} for {steps}! "
                      f"(took around {minutes} minutes)\n"
+                  f"Model improved {improvements} time(s)!"
                )
             } # slack
          else:
@@ -1169,6 +1197,7 @@ class BCN(nn.Module):
                "content": (
                   f"Finished weight perturbing `{repr(self)}`{trial} for {steps}! "
                      f"(took around {minutes} minutes)\n"
+                  f"Model improved {improvements} time(s)!"
                )
             } # discord
          data = json.dumps(payload).encode("utf-8")

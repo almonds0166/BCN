@@ -27,7 +27,7 @@ There are two main ways to query version information about this project, `bcn.__
 
 .. _whats_new:
 
-v1.1.20 (Aug 22, 2022)
+v1.1.32 (Aug 23, 2022)
 ----------------------
 
 New features
@@ -36,6 +36,7 @@ New features
 - Add ``limit`` parameter to `BCN.evaluate`. `BCN.run_wp` limits the training set evaluation to 10,000 samples instead of 60,000, in the interest of training times.
 - Add ``webhook`` parameter to `BCN.run_wp`.
 - Add `Results.wp_layers` to keep track of which layers were perturbed.
+- Add ``padding``, ``width``, and ``depth`` kwargs to the `~bcn.Fault` class.
 
 Bug fixes
 ~~~~~~~~~
