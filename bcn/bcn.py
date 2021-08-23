@@ -1048,7 +1048,11 @@ class BCN(nn.Module):
       for l in range(self.depth):
          new_model.layers[l].weights = nn.Parameter(self.layers[l].weights.detach().clone())
 
-      new_model.train(trial=self.trial, tag=self.results.tag)
+      new_model.train(
+         trial=self.trial,
+         tag=self.results.tag,
+         save_path=self.save_path,
+      )
       if self.scheme:
          new_model.train(scheme=self.scheme)
 
