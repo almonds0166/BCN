@@ -56,9 +56,9 @@ if __name__ == "__main__":
                tag=f"{width}x{width}x{depth}, {BRANCHES.name}"
             )
             model_name = repr(model).replace("<", "_").replace(">", "_")
-            fault_fig_name = model_name + ".png"
+            fig_file = "./results/wp/" + model_name + ".png"
 
             fault = Fault(model=model, proportion=FAULT)
-            plot_fault(fault, save_file=fault_fig_name)
-            
+            plot_fault(fault, save_file=fig_file)
+
             model.run_wp(STEPS, fault=fault, webhook=webhook)
