@@ -866,8 +866,8 @@ class BCN(nn.Module):
                   f"Finished training *{repr(self)}*{trial} for {epochs}! "
                      f"(took around {minutes} minutes)\n"
                   f"The epoch with best performance was epoch {self.results.best}:\n"
-                  f"* Validation loss: *{self.results.valid_losses[self.results.best]:.2f}*\n"
-                  f"* F1 score: *{100*self.results.f1_scores[self.results.best]:.2f}%*\n"
+                  f"Validation loss: {self.results.valid_losses[self.results.best]:.2f}\n"
+                  f"F1 score: {100*self.results.f1_scores[self.results.best]:.2f}%\n"
                )
             } # slack
          else:
@@ -877,9 +877,8 @@ class BCN(nn.Module):
                   f"Finished training `{repr(self)}`{trial} for {epochs}! "
                      f"(took around {minutes} minutes)\n"
                   f"The epoch with best performance was epoch {self.results.best}:\n"
-                  f"> __Validation loss__: "
-                     f"**{self.results.valid_losses[self.results.best]:.2f}**\n"
-                  f"> __F1 score__: **{100*self.results.f1_scores[self.results.best]:.2f}%**\n"
+                  f"Validation loss: {self.results.valid_losses[self.results.best]:.2f}\n"
+                  f"F1 score: {100*self.results.f1_scores[self.results.best]:.2f}%\n"
                )
             } # discord
          data = json.dumps(payload).encode("utf-8")
@@ -1192,7 +1191,8 @@ class BCN(nn.Module):
                "text": (
                   f"Finished weight perturbing *{repr(self)}*{trial} for {steps}! "
                      f"(took around {minutes} minutes)\n"
-                  f"Model improved {improvements} time(s)!"
+                  f"Model improved {improvements} time(s)!\n"
+                  f"Last F1 score: {100*f1_score:.1f}%"
                )
             } # slack
          else:
@@ -1201,7 +1201,8 @@ class BCN(nn.Module):
                "content": (
                   f"Finished weight perturbing `{repr(self)}`{trial} for {steps}! "
                      f"(took around {minutes} minutes)\n"
-                  f"Model improved {improvements} time(s)!"
+                  f"Model improved {improvements} time(s)!\n"
+                  f"Last F1 score: {100*f1_score:.1f}%"
                )
             } # discord
          data = json.dumps(payload).encode("utf-8")
