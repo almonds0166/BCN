@@ -9,6 +9,8 @@ from bcn.branches.uniform import NearestNeighborOnly, NextToNNOnly
 from bcn.branches.uniform import NearestNeighbor, NextToNN
 from bcn.branches.informed import Kappa, IndirectOnly
 
+from plotutils import plot_fault
+
 in_loc = "./results/"
 wp_loc = "./results/wp/"
 
@@ -16,10 +18,10 @@ BRANCHES = DirectOnly()
 DATASET = Dataset.MNIST
 CONNECTIONS = Connections.ONE_TO_9
 
-BATCH_SIZE = 256
+BATCH_SIZE = 64
 
 STEPS = 1000
-FAULT = 0.005
+FAULT = 0.02
 EPSILON = 0.01
 
 if __name__ == "__main__":
@@ -53,6 +55,10 @@ if __name__ == "__main__":
                save_path=wp_loc,
                tag=f"{width}x{width}x{depth}, {BRANCHES.name}"
             )
-   
-            fault = Fault(model, proportion=FAULT)
+            model_name = repr(model).replace("<", "_").replace(">", "_")
+            fault_fig_name = model_name + ".png"
+
+            fault = Fault(model=model, proportion=FAULT)
+            plot_fault(fault, save_file=fault_fig_name)
+            
             model.run_wp(STEPS, fault=fault, webhook=webhook)

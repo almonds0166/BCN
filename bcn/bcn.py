@@ -273,7 +273,7 @@ class Fault:
       if model:
          width = model.width
          depth = model.depth
-         padding = model.padding
+         padding = model.scheme.padding
 
       self.padding = padding
 
