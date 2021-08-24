@@ -21,6 +21,7 @@ CONNECTIONS = Connections.ONE_TO_9
 BATCH_SIZE = 64
 
 STEPS = 1000
+EPOCHS = 10
 FAULT = 0.02
 EPSILON = 0.01
 
@@ -55,10 +56,14 @@ if __name__ == "__main__":
                save_path=wp_loc,
                tag=f"{width}x{width}x{depth}, {BRANCHES.name}"
             )
-            model_name = repr(model).replace("<", "_").replace(">", "_")
+            model_name = repr(model).replace("<", "_").replace(">", "")
             fig_file = "./results/wp/" + model_name + ".png"
 
             fault = Fault(model=model, proportion=FAULT)
             plot_fault(fault, save_file=fig_file)
 
+            model_ = model.clone(clone_results=False)
+            model_.train(trial=f"{trial}o", save_path=wp_loc)
+
+            model_.run_epochs(EPOCHS, fault=fault, webhook=webhook)
             model.run_wp(STEPS, fault=fault, webhook=webhook)
