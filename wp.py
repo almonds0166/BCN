@@ -1,4 +1,6 @@
 
+from pathlib import Path
+
 from bcn import BCN
 
 import torch
@@ -11,8 +13,8 @@ from bcn.branches.informed import Kappa, IndirectOnly
 
 from plotutils import plot_fault
 
-in_loc = "./results/"
-wp_loc = "./results/wp/"
+in_loc = Path("./results/")
+wp_loc = Path("./results/wp/")
 
 BRANCHES = DirectOnly()
 DATASET = Dataset.MNIST
@@ -30,7 +32,7 @@ if __name__ == "__main__":
    print("Webhook URL, if desired:")
    webhook = input("> ")
 
-   for trial in (1,):
+   for trial in (1, 2, 3):
       for width in (16, 30):
          for depth in (3, 6):
 
@@ -56,11 +58,10 @@ if __name__ == "__main__":
                save_path=wp_loc,
                tag=f"{width}x{width}x{depth}, {BRANCHES.name}"
             )
-            model_name = repr(model).replace("<", "_").replace(">", "")
-            fig_file = "./results/wp/" + model_name + ".png"
+            model_name = model.default_results_filename.replace("results", "fault", 1)
 
             fault = Fault(model=model, proportion=FAULT)
-            plot_fault(fault, save_file=fig_file)
+            torch.save(fault, wp_loc / (model_name + ".pkl"))
 
             model_ = model.clone(clone_results=False)
             model_.train(trial=f"{trial}o", save_path=wp_loc)
