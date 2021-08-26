@@ -61,7 +61,7 @@ if __name__ == "__main__":
             model_name = model.default_results_filename.replace("results", "fault", 1)
 
             fault = Fault(model=model, proportion=FAULT)
-            torch.save(fault, wp_loc / (model_name + ".pkl"))
+            torch.save(fault, wp_loc / model_name)
 
             model_ = model.clone(clone_results=False)
             model_.train(trial=f"{trial}o", save_path=wp_loc)
