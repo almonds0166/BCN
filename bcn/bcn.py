@@ -13,7 +13,7 @@ from typing import Any, Union, Optional, Tuple, List, Set, Sequence, Dict
 import torch
 import torch.nn as nn
 import numpy as np
-from sklearn.metrics import precision_recall_fscore_support
+from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 import torchvision
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
@@ -325,6 +325,7 @@ class BCNLayer(nn.Module):
       dropout: The proportion of dropout to use for this layer, default 0.0.
       mean: The mean of the normal distribution to initialize weights, default 0.0.
       std: The standard deviation of the normal distribution to initialize weights, default 0.05.
+      activation: The activation function to use between layers. Default is sigmoid.
       last: Whether the layer is the final layer in the model or not, default False. If True, the
          forward output is a (10, -1) tensor representing the raw, unnormalized scores of the
          ten-digit "keypad" (refer to thesis, Section _._._) ready for cross entropy loss.
@@ -341,6 +342,7 @@ class BCNLayer(nn.Module):
       dropout (torch.nn.Dropout): The torch Dropout module use when training.
       mean (float): The mean of the normal distribution used to initialize weights.
       std (float): The standard deviation of the normal distribution used to initialize weights.
+      activation: The activation function used between layers.
       last (bool): Whether the layer is the final layer in the model or not. If ``True``, the
          forward output is a (10, -1) tensor representing the raw, unnormalized scores of the
          ten-digit "keypad" (refer to thesis, Section _._._) ready for cross entropy loss.
@@ -361,7 +363,8 @@ class BCNLayer(nn.Module):
       dropout: float=0.0,
       mean: float=0.0,
       std: float=0.05,
-      last: bool=False
+      activation=torch.sigmoid,
+      last: bool=False,
    ):
       super().__init__()
       # remember args
@@ -379,6 +382,7 @@ class BCNLayer(nn.Module):
          ell = (int(math.sqrt(connections.value))-1)//2
       self.ells = range(-ell, ell+1)
       self.device = DEV if device is None else device
+      self.activation = activation
       self.last = last
 
       # check if the connection matrices are already available locally under ./networks/
@@ -464,7 +468,7 @@ class BCNLayer(nn.Module):
          y = y.reshape((10,batch_size))
          y = torch.transpose(y, 0, 1) # CrossEntropyLoss has batch first
       else:
-         y = torch.sigmoid(y)
+         y = self.activation(y)
       
       return y
 
@@ -489,6 +493,7 @@ class BCN(nn.Module):
          floats, use the values for the corresponding layer. For example, (0, 0.3, 0.5) will set
          the dropout of the third layer (and following layers if there are any) to 0.5, whereas the
          first and second layers will have dropouts of 0 and 0.3 respectively.
+      activation: The activation function to use between layers. Default is sigmoid.
       verbose: Verbosity level. 0 (default) is no text, 1 is some, 2 is most verbose. Might become
          deprecated in future versions.
 
@@ -506,6 +511,7 @@ class BCN(nn.Module):
       dropout (Tuple[float,...]): The proportion of dropout to use for each layer, as a tuple of
          floats corresponding to the first layer, second, and so on. If the length of this tuple is
          less than the number of layers, then the reamining layers use the last value in the tuple.
+      activation: The activation function used between layers.
       verbose (int): Verbosity level. 0 (default) is no text, 1 is some, 2 is most verbose. Might
          become deprecated in future versions.
       trial (Optional[int]): The trial of this model experiment, specified by the BCN.train method.
@@ -525,6 +531,7 @@ class BCN(nn.Module):
       mean: float=0.0,
       std: float=0.05,
       dropout: Union[Tuple[float,...],float]=0.0,
+      activation=torch.sigmoid,
       verbose: int=0,
       **kwargs
    ):
@@ -552,12 +559,14 @@ class BCN(nn.Module):
       if isinstance(dropout, (int, float)):
          dropout = (dropout,) # convert to tuple
       self.dropout = dropout
+      self.activation = activation
       self.layers = nn.ModuleList()
       for d in range(depth):
          self.layers.append(
             BCNLayer(
                width=width, connections=connections, branches=branches, device=device,
-               dropout=dropout[min(len(dropout)-1,d)], mean=mean, std=std, last=(d == depth-1)
+               dropout=dropout[min(len(dropout)-1,d)], mean=mean, std=std,
+               activation=activation, last=(d == depth-1)
             )
          )
 
@@ -1212,6 +1221,67 @@ class BCN(nn.Module):
          req.add_header("Content-Length", len(data))
          response = urllib.request.urlopen(req, data)
 
+   def confusion(self, *,
+      valid: bool=True, fault: Optional[Fault]=None, shuffle: bool=False, limit: int=60000,
+   ) -> torch.Tensor:
+      """Construct an interclass confusion matrix for this model.
+
+      Important:
+         Remember to set the training scheme before running this method.
+
+      Keyword Args:
+         valid: Whether to use the validation set (``True``, default) or the training set
+            (``False``).
+         fault: The set of fault masks to use, if any.
+         shuffle: Whether to shuffle the dataset when evaluating (``True``), or not (``False``,
+            default).
+         limit: The maximum size of the dataset to evaluate on. Default is 60000.
+
+      Returns:
+         torch.Tensor: Confusion matrix of integers.
+      """
+      assert self.scheme is not None, \
+         "Before evaluating, please explicitly set this model to training mode with .train(...)."
+
+      # each row represents the actual class
+      # each column represents the predicted class
+      # so basically:
+      #    C[actual, predicted]
+      C = torch.zeros(
+         (10, 10),
+         dtype=torch.int16,
+         device=self.device,
+      )
+
+      if shuffle:
+         dset = self.scheme.valid if valid else self.scheme.train
+      else:
+         dset = self.scheme._valid if valid else self.scheme._train
+
+      if valid:
+         limit = min(10000, limit)
+      else:
+         limit = min(60000, limit)
+      max_batches = int(limit / self.scheme.batch_size)
+
+      self.eval()
+
+      with torch.no_grad():
+         for i, (batch, labels) in enumerate(dset):
+            # model expects batch_size as last dimension
+            batch = torch.transpose(batch, 0, 1).to(self.device)
+            labels = labels.to(self.device)
+            predictions = torch.roll(self(batch, fault=fault), -1, 1)
+            pred = torch.argmax(predictions, dim=1)
+            # accumulate
+            C += confusion_matrix(
+               labels.view(-1),
+               pred.view(-1),
+               labels=range(10)
+            )
+            if i >= max_batches: break
+
+      return C
 
 
 

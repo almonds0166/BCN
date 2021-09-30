@@ -27,8 +27,8 @@ There are two main ways to query version information about this project, `bcn.__
 
 .. _whats_new:
 
-v1.1.xx (Aug 23, 2022)
-----------------------
+v1.1.166 (Sep 30, 2022)
+-----------------------
 
 New features
 ~~~~~~~~~~~~
@@ -38,6 +38,8 @@ New features
 - Add `Results.wp_layers` to keep track of which layers were perturbed.
 - Add ``padding``, ``width``, and ``depth`` kwargs to the `~bcn.Fault` class.
 - Add ``fault`` argument to `BCN.run_epoch` and `BCN.run_epochs`.
+- Add ``activation`` argument to `BCN` and `BCNLayer`.
+- Add `BCN.confusion` for computing interclass confusion matrices.
 
 Bug fixes
 ~~~~~~~~~
