@@ -27,7 +27,7 @@ There are two main ways to query version information about this project, `bcn.__
 
 .. _whats_new:
 
-v1.1.166 (Sep 30, 2022)
+v1.1.166 (Sep 30, 2021)
 -----------------------
 
 New features
