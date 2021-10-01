@@ -895,7 +895,10 @@ class BCN(nn.Module):
          req.add_header("Content-Type", "application/json; charset=utf-8")
          req.add_header("User-Agent", "Almonds/0.0")
          req.add_header("Content-Length", len(data))
-         response = urllib.request.urlopen(req, data)
+         try:
+            response = urllib.request.urlopen(req, data)
+         except (urllib.error.HTTPError,):
+            print("Encountered HTTP error. Continuing...")
 
    @staticmethod
    def construct_network(
@@ -1219,7 +1222,10 @@ class BCN(nn.Module):
          req.add_header("Content-Type", "application/json; charset=utf-8")
          req.add_header("User-Agent", "Almonds/0.0")
          req.add_header("Content-Length", len(data))
-         response = urllib.request.urlopen(req, data)
+         try:
+            response = urllib.request.urlopen(req, data)
+         except (urllib.error.HTTPError,):
+            print("Experienced HTTP error. Continuing...")
 
    def confusion(self, *,
       valid: bool=True, fault: Optional[Fault]=None, shuffle: bool=False, limit: int=60000,
