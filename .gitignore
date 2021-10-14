@@ -11,6 +11,9 @@ results/
 # connection matrices
 networks/
 
+# figures
+scripts/*/*.png
+
 # virtual environment
 venv/
 
