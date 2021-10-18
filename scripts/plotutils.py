@@ -274,10 +274,9 @@ def keypad_connectedness(model):
 
    Awful time complexity, as of now.
 
-   Returns a pair of lists, where the first is a list of numpy boolean matrices that hold the
-   value True where iff a neuron would affect *at least 1 keypad neuron* in the last layer and the
-   second is a list of numpy boolean matrices that hold the value True where iff a neuron would
-   affect all 10 keypad neurons in the final layers.
+   Returns a list of numpy arrays representing the model layers where array values represent how
+   many output neurons in the keypad layer that corresponding neuron has access to, in 0 to 10
+   inclusive.
    """
    # create a model clone that will have unit weights
    w = model.width; hw = w*w
