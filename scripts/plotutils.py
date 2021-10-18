@@ -2,6 +2,9 @@
 import torch
 import numpy as np
 from matplotlib import pyplot as plt
+import matplotlib.colors as mcolors
+
+from bcn import BCN
 
 # figure settings
 FONT_SIZE = 14
@@ -266,24 +269,75 @@ def plot_f1_scores(results, title: str,
 
    return plt.show()
 
-def plot_fault(fault, save_file=None):
+def keypad_connectedness(model):
+   """Returns representations of the "connectedness" to the output layer keypad.
+
+   Awful time complexity, as of now.
+
+   Returns a pair of lists, where the first is a list of numpy boolean matrices that hold the
+   value True where iff a neuron would affect *at least 1 keypad neuron* in the last layer and the
+   second is a list of numpy boolean matrices that hold the value True where iff a neuron would
+   affect all 10 keypad neurons in the final layers.
+   """
+   # create a model clone that will have unit weights
+   w = model.width; hw = w*w
+   d = model.depth
+
+   # marks the number of keypad outputs that the neuron is able to reach
+   kc = [np.zeros((w,w), dtype=int) for l in range(d)]
+
+   for l in range(d):
+      unitary = BCN(
+         w, d-l,
+         branches=model.branches,
+         connections=model.connections,
+         activation=torch.relu
+      )
+      for layer in unitary.layers:
+         torch.nn.init.constant_(layer.weights, 1)
+      unitary.eval()
+      offset = unitary(torch.zeros(hw,1)).detach().numpy()
+      for i in range(w):
+         for j in range(w):
+            #print("\t", i, j)
+            in_ = torch.zeros((w,w))
+            in_[i,j] = 1
+            out = unitary(in_.reshape(hw,1)).detach().numpy() - offset
+            kc[l][i,j] = np.count_nonzero(out)
+
+   return kc
+
+def plot_fault(fault, save_file=None, model=None):
    """Plots a fault mask.
 
    Args:
       save_file: Where to save the plot to.
+      model: The model to use to color the connectedness of the keypad.
    """
+   if model:
+      kc = keypad_connectedness(model)
    N = len(fault)
    hw = torch.numel(fault[0])
    w = int(np.sqrt(hw))
    fig, axes = plt.subplots(1,N, figsize=(4*N,4))
    for i, mask in enumerate(fault):
       ax = axes[i]
-      ax.imshow(mask.reshape((w,w)), cmap="Greys_r")
+      if model:
+         colors = [(0,.53,.74,c) for c in np.linspace(0,1,100)]
+         cmapblue = mcolors.LinearSegmentedColormap.from_list("mycmap", colors, N=5)
+         im = ax.imshow(kc[i], cmap=cmapblue, vmin=0, vmax=10)
+      cmap = mcolors.ListedColormap([(.77,.01,.20,.6), (0,0,0,0)])
+      ax.imshow(mask.reshape((w,w)), cmap=cmap)
       ax.set_xticks(tuple())
       ax.set_yticks(tuple())
       ax.set_xticks(np.arange(-.5, w, 1), minor=True)
       ax.set_yticks(np.arange(-.5, w, 1), minor=True)
       ax.grid(which="minor", color="lightgray", linestyle=":")
+
+   if model:
+      fig.subplots_adjust(right=0.8)
+      cbar_ax = fig.add_axes([0.85, 0.15, 0.02, 0.7])
+      fig.colorbar(im, cax=cbar_ax,) #ticks=range(11))
 
    if save_file:
       plt.savefig(save_file)

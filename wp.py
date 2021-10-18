@@ -11,8 +11,6 @@ from bcn.branches.uniform import NearestNeighborOnly, NextToNNOnly
 from bcn.branches.uniform import NearestNeighbor, NextToNN
 from bcn.branches.informed import Kappa, IndirectOnly
 
-from plotutils import plot_fault
-
 in_loc = Path("./results/")
 wp_loc = Path("./results/wp/")
 
