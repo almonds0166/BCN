@@ -1,9 +1,8 @@
 
 """
-Tabulate the maximum F1 scores for each of the eight types of networks investigate in the thesis,
-*before and after the fault*, and emphasize the differences, too.
+Tabulate the F1 scores before and after WP.
 
-This is for chapter 3 of my thesis.
+This is for chapter 4 of my thesis.
 
 The given path for the *WP* results should contain the following structure:
 
@@ -15,7 +14,7 @@ trial names like "t1" or "t3", but the ones that had SGD ran on them have trial 
 and "t2o", where the "o" kind of represents an origin or baseline or control group.
 
 Ideas I have in mind for improvement:
-- You know what? I might just abandon these tables and go with more visually appealing figures...
+- None
 """
 
 import sys; sys.path.append("../")
@@ -24,8 +23,7 @@ import re
 
 from bcn import Results, Dataset, Connections
 
-RESULTS_PATH = Path(input("Enter the location of your *BCN* results\n> "))
-WP_PATH = Path(input("Enter the location of your *WP* results\n> "))
+WP_PATH = Path("C:\\Users\\K\\Documents\\MIT\\meng\\results_wp")
 
 DATASET = Dataset.MNIST
 CONNECTIONS = Connections.ONE_TO_9
@@ -50,55 +48,15 @@ def mean(ell, default=None):
 
 def main():
 
-   # get the BEFORE fault data
-   # these are the results found in RESULTS_PATH
-   before_data = {}
-
-   for file in RESULTS_PATH.iterdir():
-      if not file.name.startswith("results_") or file.suffix != ".pkl": continue
-      if not f".{DATASET.name}." in file.stem: continue
-      if not f"@{CONNECTIONS.value}-" in file.stem: continue
-
-      print(file.name)
-
-      r = Results()
-      r.load(file)
-
-      m = re.search(r"([0-9]+)x([0-9]+)x([0-9]+)", file.stem)
-      h = int(m.group(1))
-      w = int(m.group(2))
-      d = int(m.group(3))
-
-      m = re.search(rf"@{CONNECTIONS.value}-([\w\.\(\)0-9]+).{DATASET.name}.", file.stem)
-      b = m.group(1)
-
-      bucket = (h, w, d, b)
-
-      if bucket not in before_data:
-         before_data[bucket] = {
-            "vl": [],
-            "ac": [],
-            "f1": [],
-         }
-
-      # get the BEST data point
-      vl = min(r.valid_losses)
-      ac = max(r.accuracies)
-      f1 = max(r.f1_scores)
-
-      before_data[bucket]["vl"].append(vl)
-      before_data[bucket]["ac"].append(ac)
-      before_data[bucket]["f1"].append(f1)
-
-   # get the results immediately after fault
+   # get the BEFORE and AFTER WP data
    # these are the results found in WP_PATH
-   after_data = {}
+   wp_data = {}
 
    for file in WP_PATH.iterdir():
       if not file.name.startswith("results_") or file.suffix != ".pkl": continue
       if not f".{DATASET.name}." in file.stem: continue
       if not f"@{CONNECTIONS.value}-" in file.stem: continue
-      if file.stem.endswith("o"): continue # just skip the SGD ones
+      if file.stem.endswith("o"): continue # skip the SGD ones
 
       print(file.name)
 
@@ -115,28 +73,78 @@ def main():
 
       bucket = (h, w, d, b)
 
-      if bucket not in after_data:
-         after_data[bucket] = {
+      if bucket not in wp_data:
+         wp_data[bucket] = {
+            "before": {"vl": [], "ac": [], "f1": []},
+            "after": {"vl": [], "ac": [], "f1": []},
+         }
+
+      # get the FIRST data point
+      index = -(r.step + 1)
+      vl = r.valid_losses[index]
+      ac = r.accuracies[index]
+      f1 = r.f1_scores[index]
+
+      wp_data[bucket]["before"]["vl"].append(vl)
+      wp_data[bucket]["before"]["ac"].append(ac)
+      wp_data[bucket]["before"]["f1"].append(f1)
+
+      # get the last data point
+      vl = r.valid_losses[-1]
+      ac = r.accuracies[-1]
+      f1 = r.f1_scores[-1]
+
+      wp_data[bucket]["after"]["vl"].append(vl)
+      wp_data[bucket]["after"]["ac"].append(ac)
+      wp_data[bucket]["after"]["f1"].append(f1)
+
+   # get the results for SGD recovery
+   # these are the results found in WP_PATH
+   sgd_data = {}
+
+   for file in WP_PATH.iterdir():
+      if not file.name.startswith("results_") or file.suffix != ".pkl": continue
+      if not f".{DATASET.name}." in file.stem: continue
+      if not f"@{CONNECTIONS.value}-" in file.stem: continue
+      if not file.stem.endswith("o"): continue # skip the WP ones
+
+      print(file.name)
+
+      r = Results()
+      r.load(file)
+
+      m = re.search(r"([0-9]+)x([0-9]+)x([0-9]+)", file.stem)
+      h = int(m.group(1))
+      w = int(m.group(2))
+      d = int(m.group(3))
+
+      m = re.search(rf"@{CONNECTIONS.value}-([\w\.\(\)0-9]+).{DATASET.name}.", file.stem)
+      b = m.group(1)
+
+      bucket = (h, w, d, b)
+
+      if bucket not in sgd_data:
+         sgd_data[bucket] = {
             "vl": [],
             "ac": [],
             "f1": [],
          }
 
-      # get the FIRST data point
-      vl = r.valid_losses[0]
-      ac = r.accuracies[0]
-      f1 = r.f1_scores[0]
+      # get the final data point
+      vl = r.valid_losses[-1]
+      ac = r.accuracies[-1]
+      f1 = r.f1_scores[-1]
 
-      after_data[bucket]["vl"].append(vl)
-      after_data[bucket]["ac"].append(ac)
-      after_data[bucket]["f1"].append(f1)
+      sgd_data[bucket]["vl"].append(vl)
+      sgd_data[bucket]["ac"].append(ac)
+      sgd_data[bucket]["f1"].append(f1)
 
    # integrate the data into one nice table!
    lines = [
-      "% Generated with ``scripts/tab_bcn_fault.py``",
+      "% Generated with ``scripts/tab_wp_scores.py``",
       "\\begin{table}",
       "\\centering",
-      "\\begin{tabular}{ " + ("c " * 5) + "}",
+      "\\begin{tabular}{ " + ("c " * 6) + "}",
       "\\hline",
       (
          "\\multicolumn{2}{ c }{Model} & "
@@ -145,9 +153,10 @@ def main():
       "\\hline",
       (
          "Shape & Branches & "
-         "Before fault & "
          "After fault & "
-         "Abs. diff. \\\\"
+         "SGD & "
+         "WP & "
+         "Recovery \\\\"
       ),
       "\\hline",
    ]
@@ -161,32 +170,35 @@ def main():
          for b in BRANCH_NAMES.keys(): # dict keys are ordered starting in ~3.7
             bucket = (h, w, d, b)
 
-            trials = min(trials, len(before_data[bucket]), len(after_data[bucket]))
+            trials = min(trials,
+               len(wp_data[bucket]["before"]),
+               len(wp_data[bucket]["after"]),
+               len(sgd_data[bucket])
+            )
 
-            before_vl = mean(before_data[bucket]["vl"])
-            before_ac = mean(before_data[bucket]["ac"])
-            before_f1 = mean(before_data[bucket]["f1"])
+            before_wp_vl = mean(wp_data[bucket]["before"]["vl"])
+            before_wp_ac = mean(wp_data[bucket]["before"]["ac"])
+            before_wp_f1 = mean(wp_data[bucket]["before"]["f1"])
 
-            after_vl = mean(after_data[bucket]["vl"])
-            after_ac = mean(after_data[bucket]["ac"])
-            after_f1 = mean(after_data[bucket]["f1"])
+            after_wp_vl = mean(wp_data[bucket]["after"]["vl"])
+            after_wp_ac = mean(wp_data[bucket]["after"]["ac"])
+            after_wp_f1 = mean(wp_data[bucket]["after"]["f1"])
 
-            diff_vl = after_vl - before_vl
-            diff_ac = after_ac - before_ac
-            diff_f1 = after_f1 - before_f1
+            sgd_vl = mean(sgd_data[bucket]["vl"])
+            sgd_ac = mean(sgd_data[bucket]["ac"])
+            sgd_f1 = mean(sgd_data[bucket]["f1"])
+
+            relative_vl = (after_wp_vl - before_wp_vl) / (sgd_vl - before_wp_vl)
+            relative_ac = (after_wp_ac - before_wp_ac) / (sgd_ac - before_wp_ac)
+            relative_f1 = (after_wp_f1 - before_wp_f1) / (sgd_f1 - before_wp_f1)
 
             lines.append((
                f"{h}x{w}x{d} & "
                f"{BRANCH_NAMES[b]} & "
-               #f"{before_vl:.3f} & "
-               #f"{100*before_ac:.1f}\\% & "
-               f"{100*before_f1:.1f}\\% & "
-               #f"{after_vl:.3f} & "
-               #f"{100*after_ac:.1f}\\% & "
-               f"{100*after_f1:.1f}\\% & "
-               #f"{diff_vl:+.3f} & "
-               #f"{100*diff_ac:+.1f}\\% & "
-               f"{100*diff_f1:+.1f}\\% \\\\"
+               f"{100*before_wp_f1:.1f}\\% & "
+               f"{100*sgd_f1:.1f}\\% & "
+               f"{100*after_wp_f1:.1f}\\% & "
+               f"{relative_f1:+.2f} \\\\"
             ))
          lines.append("\\hline")
 
@@ -194,10 +206,12 @@ def main():
       #"\\hline",
       "\\end{tabular}",
       (
-         f"\\caption{{Drop in performance with {PERCENT}\\% applied fault for {DATASET.value} "
-         f"at 1-to-{CONNECTIONS.value} connections (average of {trials} trials).}}"
+         f"\\caption{{Recovery in performance from weight perturbation "
+         f"after {PERCENT}\\% applied fault. "
+         f"Results for {DATASET.value} at 1-to-{CONNECTIONS.value} connections, average of "
+         f"{trials} trials.}}"
       ),
-      f"\\label{{table:ch3:fault_{DATASET.name.lower()}@{CONNECTIONS.value}}}",
+      f"\\label{{table:ch4:scores_{DATASET.name.lower()}@{CONNECTIONS.value}}}",
       "\\end{table}",
    ])
 
