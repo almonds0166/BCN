@@ -123,9 +123,10 @@ def main():
          }
 
       # get the FIRST data point
-      vl = r.valid_losses[0]
-      ac = r.accuracies[0]
-      f1 = r.f1_scores[0]
+      index = -(r.step + 1)
+      vl = r.valid_losses[index]
+      ac = r.accuracies[index]
+      f1 = r.f1_scores[index]
 
       after_data[bucket]["vl"].append(vl)
       after_data[bucket]["ac"].append(ac)

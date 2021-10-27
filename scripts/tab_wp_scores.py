@@ -23,7 +23,7 @@ import re
 
 from bcn import Results, Dataset, Connections
 
-WP_PATH = Path("C:\\Users\\K\\Documents\\MIT\\meng\\results_wp")
+WP_PATH = Path(input("Enter the location of your *WP* results\n> "))
 
 DATASET = Dataset.MNIST
 CONNECTIONS = Connections.ONE_TO_9
@@ -144,18 +144,20 @@ def main():
       "% Generated with ``scripts/tab_wp_scores.py``",
       "\\begin{table}",
       "\\centering",
-      "\\begin{tabular}{ " + ("c " * 6) + "}",
+      "\\begin{tabular}{ " + ("c " * 8) + "}",
       "\\hline",
       (
          "\\multicolumn{2}{ c }{Model} & "
-         "\\multicolumn{3}{ c }{F1 score} \\\\"
+         "\\multicolumn{6}{ c }{F1 score} \\\\"
       ),
       "\\hline",
       (
          "Shape & Branches & "
          "After fault & "
          "SGD & "
+         "$\\Delta_\\mathrm{SGD}$ & "
          "WP & "
+         "$\\Delta_\\mathrm{WP}$ & "
          "Recovery \\\\"
       ),
       "\\hline",
@@ -188,16 +190,26 @@ def main():
             sgd_ac = mean(sgd_data[bucket]["ac"])
             sgd_f1 = mean(sgd_data[bucket]["f1"])
 
-            relative_vl = (after_wp_vl - before_wp_vl) / (sgd_vl - before_wp_vl)
-            relative_ac = (after_wp_ac - before_wp_ac) / (sgd_ac - before_wp_ac)
-            relative_f1 = (after_wp_f1 - before_wp_f1) / (sgd_f1 - before_wp_f1)
+            d_wp_vl = after_wp_vl - before_wp_vl
+            d_wp_ac = after_wp_ac - before_wp_ac
+            d_wp_f1 = after_wp_f1 - before_wp_f1
+
+            d_sgd_vl = sgd_vl - before_wp_vl
+            d_sgd_ac = sgd_ac - before_wp_ac
+            d_sgd_f1 = sgd_f1 - before_wp_f1
+
+            relative_vl = d_wp_vl / d_sgd_vl
+            relative_ac = d_wp_ac / d_sgd_ac
+            relative_f1 = d_wp_f1 / d_sgd_f1
 
             lines.append((
                f"{h}x{w}x{d} & "
                f"{BRANCH_NAMES[b]} & "
                f"{100*before_wp_f1:.1f}\\% & "
                f"{100*sgd_f1:.1f}\\% & "
+               f"{100*d_sgd_f1:+.1f}\\% &"
                f"{100*after_wp_f1:.1f}\\% & "
+               f"{100*d_wp_f1:+.1f}\\% & "
                f"{relative_f1:+.2f} \\\\"
             ))
          lines.append("\\hline")
