@@ -30,7 +30,8 @@ from bcn.branches.informed import Kappa, IndirectOnly
 from plotutils import keypad_connectedness
 
 CONNECTIONS = Connections.ONE_TO_9
-BRANCHES = NearestNeighborOnly()
+WIDTH = 30
+BRANCHES = (DirectOnly(), NearestNeighborOnly())
 DEPTH = 6
 
 BRANCH_NAMES = {
@@ -49,12 +50,13 @@ plt.rcParams.update({'font.size': FONT_SIZE})
 
 def main():
 
-   fig, axes = plt.subplots(2, DEPTH, figsize=(4*DEPTH,8))
-   
-   for i, width in enumerate((16, 30)):
-      model = BCN(width, DEPTH,
+   b = len(BRANCHES)
+   fig, axes = plt.subplots(b, DEPTH, figsize=(4*DEPTH,4*b))
+
+   for i, branches in enumerate(BRANCHES):
+      model = BCN(WIDTH, DEPTH,
          connections=CONNECTIONS,
-         branches=BRANCHES,
+         branches=branches,
          dropout=0,
       )
       images = keypad_connectedness(model)
@@ -65,24 +67,25 @@ def main():
          ax.imshow(image, cmap=cmapblue, vmin=0, vmax=10)
          ax.set_xticks(tuple())
          ax.set_yticks(tuple())
-         ax.set_xticks(np.arange(-.5, width, 1), minor=True)
-         ax.set_yticks(np.arange(-.5, width, 1), minor=True)
+         ax.set_xticks(np.arange(-.5, WIDTH, 1), minor=True)
+         ax.set_yticks(np.arange(-.5, WIDTH, 1), minor=True)
          ax.grid(which="minor", color="lightgray", linestyle=":")
 
-   name = BRANCH_NAMES[str(BRANCHES)]
+   branch_names = ", ".join([branches.name for branches in BRANCHES])
    fig.suptitle((
-      f"Keypad connectedness of {name.lower()} branches\n"
-      f"of shapes 16x16x{DEPTH} and 30x30x{DEPTH}"
+      f"Keypad connectedness of {branch_names}\n"
+      f"on {WIDTH}x{WIDTH}x{DEPTH} models"
    ))
+   fig.tight_layout()
 
    output_folder = Path("./fig_bcn_cores/")
    output_folder.mkdir(parents=True, exist_ok=True)
-   filename = f"bcn-cores_{BRANCHES}_x{DEPTH}@{CONNECTIONS.value}.png"
+   filename = f"bcn-cores_{WIDTH}x{WIDTH}x{DEPTH}@{CONNECTIONS.value}.png"
    plt.savefig(output_folder / filename)
    plt.show()
 
    caption = (
-      f"``Keypad connectedness'' images of {name} models "
+      f"``Keypad connectedness'' images of {branch_names} models "
       f"for shapes 16x16x{DEPTH} and 30x30x{DEPTH}."
    )
 
@@ -92,7 +95,7 @@ def main():
       "   \\centering",
       f"   \\includegraphics[width=\\textwidth]{{{filename}}}",
       f"   \\caption{{{caption}}}",
-      f"   \\label{{fig:bcn_cores_{BRANCHES}_x{DEPTH}@{CONNECTIONS.value}}}",
+      f"   \\label{{fig:bcn_cores_{WIDTH}x{WIDTH}x{DEPTH}@{CONNECTIONS.value}}}",
       "\\end{figure}",
    ]
 
