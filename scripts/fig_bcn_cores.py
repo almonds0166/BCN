@@ -27,31 +27,24 @@ from bcn.branches import DirectOnly
 from bcn.branches.uniform import ( NearestNeighborOnly, NextToNNOnly,
                                    NearestNeighbor, NextToNN, )
 from bcn.branches.informed import Kappa, IndirectOnly
-from plotutils import keypad_connectedness
+from plotutils import keypad_connectedness, ABBREVIATIONS, BRANCH_NAMES
 
 CONNECTIONS = Connections.ONE_TO_9
-WIDTH = 30
-BRANCHES = (DirectOnly(), NearestNeighborOnly())
+WIDTH = 16
+BRANCHES = (DirectOnly(), NearestNeighbor())#, NextToNN())
 DEPTH = 6
 
-BRANCH_NAMES = {
-   "DirectOnly": "Direct connections only",
-   "informed.Kappa(1.0)": "Grating strength 1.0",
-   "informed.Kappa(1.5)": "Grating strength 1.5",
-   "informed.IndirectOnly": "Grating strength 2.4048",
-   "uniform.NearestNeighborOnly": "First ring only",
-   "uniform.NextToNNOnly": "Second ring only",
-   "uniform.NearestNeighbor": "Uniform nearest neighbor",
-   "uniform.NextToNN": "Uniform next-to-nearest neighbor",
-}
+MARKS = {(0,0),(1,3),}
+#MARKS = {(1,0),(2,2),}
 
-FONT_SIZE = 14
+FONT_SIZE = 24
 plt.rcParams.update({'font.size': FONT_SIZE})
 
 def main():
 
    b = len(BRANCHES)
-   fig, axes = plt.subplots(b, DEPTH, figsize=(4*DEPTH,4*b))
+   br_names = [ABBREVIATIONS[repr(br).strip("()")] for br in BRANCHES]
+   fig, axes = plt.subplots(b, DEPTH, figsize=(3.6*DEPTH,3.7*b))
 
    for i, branches in enumerate(BRANCHES):
       model = BCN(WIDTH, DEPTH,
@@ -63,20 +56,40 @@ def main():
       for j, image in enumerate(images):
          ax = axes[i,j]
          colors = [(0,.53,.74,c) for c in np.linspace(0,1,100)]
-         cmapblue = mcolors.LinearSegmentedColormap.from_list("mycmap", colors, N=5)
-         ax.imshow(image, cmap=cmapblue, vmin=0, vmax=10)
+         cmapblue = mcolors.LinearSegmentedColormap.from_list("mycmap", colors, N=10)
+         last_im = ax.imshow(image, cmap=cmapblue, vmin=0, vmax=10)
          ax.set_xticks(tuple())
          ax.set_yticks(tuple())
          ax.set_xticks(np.arange(-.5, WIDTH, 1), minor=True)
          ax.set_yticks(np.arange(-.5, WIDTH, 1), minor=True)
-         ax.grid(which="minor", color="lightgray", linestyle=":")
+         ax.grid(which="minor", color="darkgray", linestyle=":")
+         if j == 0:
+            ax.set_ylabel(f"{br_names[i]}")
 
-   branch_names = ", ".join([branches.name for branches in BRANCHES])
+         if (i,j) in MARKS:
+            ax.set_xlabel("*", fontdict={'fontsize': 38})
+         elif j == DEPTH-1:
+            ax.set_xlabel("Penultimate plane", fontdict={'fontsize': 19})
+
+
+   # add colorbar
+   fig.subplots_adjust(right=0.85)
+   cbar_ax = fig.add_axes([0.89, 0.2, 0.015, 0.6])
+   cbar = fig.colorbar(last_im, cax=cbar_ax, ticks=np.arange(0, 11))
+   cbar.ax.tick_params(labelsize=17)
+
+   if len(br_names) == 1:
+      branch_names = br_names[0]
+   elif len(br_names) == 2:
+      branch_names = f"{br_names[0]} & {br_names[1]}"
+   else:
+      branch_names = ", ".join(br_names[:-1]) + f", & {br_names[-1]}"
+      
    fig.suptitle((
-      f"Keypad connectedness of {branch_names}\n"
-      f"on {WIDTH}x{WIDTH}x{DEPTH} models"
+      f"Output connectedness of {branch_names} "
+      f"on {WIDTH}x{WIDTH} models"
    ))
-   fig.tight_layout()
+   #fig.tight_layout()
 
    output_folder = Path("./fig_bcn_cores/")
    output_folder.mkdir(parents=True, exist_ok=True)
@@ -85,8 +98,8 @@ def main():
    plt.show()
 
    caption = (
-      f"``Keypad connectedness'' images of {branch_names} models "
-      f"for shapes 16x16x{DEPTH} and 30x30x{DEPTH}."
+      f"Output connectedness images of {branch_names} models "
+      f"for input dimensions {WIDTH}x{WIDTH}."
    )
 
    lines = [
@@ -94,7 +107,7 @@ def main():
       "\\begin{figure}[h]",
       "   \\centering",
       f"   \\includegraphics[width=\\textwidth]{{{filename}}}",
-      f"   \\caption{{{caption}}}",
+      f"   \\caption[{caption}]{{{caption}}}",
       f"   \\label{{fig:bcn_cores_{WIDTH}x{WIDTH}x{DEPTH}@{CONNECTIONS.value}}}",
       "\\end{figure}",
    ]

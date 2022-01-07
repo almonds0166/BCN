@@ -43,7 +43,14 @@ class Handles:
       W = get_weights(ui)
       B = get_branches(ui)
       c = get_connections(ui)
-      A = bcn.BCN.construct_network(12, c, B)
+      _A = bcn.BCN.construct_network(12, c, B)
+      A = {}
+      range_ = (-1, 0, 1) if c.value == 9 else (-2, -1, 0, 1, 2)
+      i = 0
+      for dy in range_:
+         for dx in range_:
+            A[dy, dx] = _A[i,:,:]
+            i += 1
       I = get_input(ui).reshape(144,1)
       # forward
       O = np.zeros(I.shape)
@@ -191,7 +198,7 @@ def allow_user_input(ui, allow: bool) -> None:
       ui.btn_load,
       ui.tw_weights,
       ui.cb_direct,
-      ui.tw_kernel,
+      #ui.tw_kernel,
       ui.tw_input,
       ui.tw_output,
    ):

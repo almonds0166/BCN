@@ -23,25 +23,17 @@ import re
 
 from bcn import Results, Dataset, Connections
 
+from plotutils import ABBREVIATIONS
+
+RESULTS_PATH = Path(input("Enter the location of all your *baseline* results\n> "))
 WP_PATH = Path(input("Enter the location of your *WP* results\n> "))
 
 DATASET = Dataset.MNIST
 CONNECTIONS = Connections.ONE_TO_9
-PERCENT = 2
+PERCENT = 10
 
 # get subfolder with only the desired results
 WP_PATH /= f"{PERCENT}percent"
-
-BRANCH_NAMES = {
-   "DirectOnly": "Direct connections only",
-   "informed.Kappa(1.0)": "Grating strength 1.0",
-   "informed.Kappa(1.5)": "Grating strength 1.5",
-   "informed.IndirectOnly": "Grating strength 2.4048",
-   "uniform.NearestNeighborOnly": "First ring only",
-   "uniform.NextToNNOnly": "Second ring only",
-   "uniform.NearestNeighbor": "Uniform nearest neighbor",
-   "uniform.NextToNN": "Uniform next-to-nearest neighbor",
-}
 
 def mean(ell, default=None):
    return sum(ell) / len(ell) if ell else default
@@ -139,6 +131,44 @@ def main():
       sgd_data[bucket]["ac"].append(ac)
       sgd_data[bucket]["f1"].append(f1)
 
+   # get the BEFORE FAULT results...
+   before_data = {}
+   for file in RESULTS_PATH.iterdir():
+      if not file.name.startswith("results_") or file.suffix != ".pkl": continue
+      if not f".{DATASET.name}." in file.stem: continue
+      if not f"@{CONNECTIONS.value}-" in file.stem: continue
+
+      print(file.name)
+
+      r = Results()
+      r.load(file)
+
+      m = re.search(r"([0-9]+)x([0-9]+)x([0-9]+)", file.stem)
+      h = int(m.group(1))
+      w = int(m.group(2))
+      d = int(m.group(3))
+
+      m = re.search(rf"@{CONNECTIONS.value}-([\w\.\(\)0-9]+).{DATASET.name}.", file.stem)
+      b = m.group(1)
+
+      bucket = (h, w, d, b)
+
+      if bucket not in before_data:
+         before_data[bucket] = {
+            "vl": [],
+            "ac": [],
+            "f1": [],
+         }
+
+      # get the BEFORE FAULT data point
+      vl = r.valid_losses[r.best]
+      ac = r.accuracies[r.best]
+      f1 = r.f1_scores[r.best]
+
+      before_data[bucket]["vl"].append(vl)
+      before_data[bucket]["ac"].append(ac)
+      before_data[bucket]["f1"].append(f1)
+
    # integrate the data into one nice table!
    lines = [
       "% Generated with ``scripts/tab_wp_scores.py``",
@@ -147,18 +177,14 @@ def main():
       "\\begin{tabular}{ " + ("c " * 8) + "}",
       "\\hline",
       (
-         "\\multicolumn{2}{ c }{Model} & "
-         "\\multicolumn{6}{ c }{F1 score} \\\\"
-      ),
-      "\\hline",
-      (
-         "Shape & Branches & "
-         "After fault & "
+         "Model & "
+         "{\\footnotesize Before fault} & "
+         "{\\footnotesize After fault} & "
          "SGD & "
-         "$\\Delta_\\mathrm{SGD}$ & "
          "WP & "
+         "$\\Delta_\\mathrm{SGD}$ & "
          "$\\Delta_\\mathrm{WP}$ & "
-         "Recovery \\\\"
+         "{\\footnotesize $\\Delta_\\mathrm{WP}/\\Delta_\\mathrm{SGD}$} \\\\"
       ),
       "\\hline",
    ]
@@ -169,14 +195,27 @@ def main():
    for w in (16, 30):
       h = w
       for d in (3, 6):
-         for b in BRANCH_NAMES.keys(): # dict keys are ordered starting in ~3.7
+         lines.append((
+            "\\multicolumn{8}{l}{"
+            f"{h}x{w}x{d}"
+            "} \\\\"
+         ))
+         lines.append("\\hline")
+
+         for b in ABBREVIATIONS.keys(): # dict keys are ordered starting in ~3.7
             bucket = (h, w, d, b)
+
+            if bucket not in wp_data: continue # !!
 
             trials = min(trials,
                len(wp_data[bucket]["before"]),
                len(wp_data[bucket]["after"]),
                len(sgd_data[bucket])
             )
+
+            before_fault_vl = mean(before_data[bucket]["vl"])
+            before_fault_ac = mean(before_data[bucket]["ac"])
+            before_fault_f1 = mean(before_data[bucket]["f1"])
 
             before_wp_vl = mean(wp_data[bucket]["before"]["vl"])
             before_wp_ac = mean(wp_data[bucket]["before"]["ac"])
@@ -203,14 +242,15 @@ def main():
             relative_f1 = d_wp_f1 / d_sgd_f1
 
             lines.append((
-               f"{h}x{w}x{d} & "
-               f"{BRANCH_NAMES[b]} & "
+               #f"{h}x{w}x{d} & "
+               f"{ABBREVIATIONS[b]} & "
+               f"{100*before_fault_f1:.1f}\\% & "
                f"{100*before_wp_f1:.1f}\\% & "
                f"{100*sgd_f1:.1f}\\% & "
-               f"{100*d_sgd_f1:+.1f}\\% &"
                f"{100*after_wp_f1:.1f}\\% & "
+               f"{100*d_sgd_f1:+.1f}\\% &"
                f"{100*d_wp_f1:+.1f}\\% & "
-               f"{relative_f1:+.2f} \\\\"
+               f"{relative_f1:.2f} \\\\"
             ))
          lines.append("\\hline")
 
@@ -223,7 +263,8 @@ def main():
          f"Results for {DATASET.value} at 1-to-{CONNECTIONS.value} connections, average of "
          f"{trials} trials.}}"
       ),
-      f"\\label{{table:ch4:scores_{DATASET.name.lower()}@{CONNECTIONS.value}}}",
+      f"\\label{{table:ch4:scores_{DATASET.name.lower()}"
+      f"@{CONNECTIONS.value}}}_{PERCENT}percent",
       "\\end{table}",
    ])
 

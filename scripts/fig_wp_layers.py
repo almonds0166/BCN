@@ -23,8 +23,11 @@ from pathlib import Path
 import re
 
 from matplotlib import pyplot as plt
+import numpy as np
 
 from bcn import Results, Dataset, Connections
+
+from plotutils import MNIST_COLOR, FASHION_COLOR
 
 WP_PATH = Path(input("Enter the location of your *WP* results\n> "))
 
@@ -45,8 +48,10 @@ BRANCH_NAMES = {
    "uniform.NextToNN": "Uniform next-to-nearest neighbor",
 }
 
-FONT_SIZE = 14
+FONT_SIZE = 20
 plt.rcParams.update({'font.size': FONT_SIZE})
+
+DX = 0.15
 
 def mean(ell, default=None):
    return sum(ell) / len(ell) if ell else default
@@ -57,6 +62,9 @@ def count_successul_perturbations(dataset, depth, debug=False):
    Uses the WP_PATH as defined in the global frame above.
    """
    improvements = [0] * depth
+   margins = [0] * depth
+
+   trials = 0
 
    for file in WP_PATH.iterdir():
       if not file.name.startswith("results_") or file.suffix != ".pkl": continue
@@ -71,6 +79,8 @@ def count_successul_perturbations(dataset, depth, debug=False):
 
       if d != depth: continue
 
+      trials += 1
+
       if debug: print(file.name)
 
       m = re.search(rf"@{CONNECTIONS.value}-([\w\.\(\)0-9]+).{dataset.name}.", file.stem)
@@ -80,37 +90,131 @@ def count_successul_perturbations(dataset, depth, debug=False):
       r.load(file)
 
       N = len(r.wp_layers)
-      for i, (l, f1) in enumerate(zip(r.wp_layers, r.f1_scores[-(N+1):])):
-         next_f1 = r.f1_scores[i+1]
-         improvements[l] += (next_f1 > f1) # record all improvements!
+      f1_scores = r.f1_scores[-(N+1):]
 
-   return improvements
+      for i, (l, f1) in enumerate(zip(r.wp_layers, f1_scores)):
+         next_f1 = f1_scores[i+1]
+         margin = next_f1 - f1
+         margins[l] += margin # accumulate absolute change in F1 score!
+         improvements[l] += (margin > 0) # record all *improvements*!
 
-def main():
-   fig, axes = plt.subplots(2,2)
-   fig.set_size_inches(16,10)
-   axes = axes.flatten()
+   return improvements, margins, trials
 
-   max_y = 0
+def plot_bins(ax, bins1, bins2):
+   assert len(bins1) == len(bins2)
+   N = len(bins1)
+   x = np.arange(N)
+   ax.bar(x-DX, bins1, width=2*DX, color=MNIST_COLOR, align="center", label="MNIST")
+   ax.bar(x+DX, bins2, width=2*DX, color=FASHION_COLOR, align="center", label="Fashion-MNIST")
 
-   axes_iterator = iter(axes)
+def plot_subfigures(index):
+   YLABELS = ("Total count of improvements", "Total $F_1$ score margin")
+   TITLES = ("Weight perturbation successes counted across respective layers",
+      "Change in $F_1$ score accumulated across respective layers")
+
+   fig, axes = plt.subplots(1,2,gridspec_kw={"width_ratios": [1,1.618]})
+   fig.set_size_inches(16,6)
+
+   max_y_imp = 0
+   max_y_mar = 0
+   data = {}
+   trials = 0
+
    for dataset in (Dataset.MNIST, Dataset.FASHION):
       for depth in (3, 6):
-         ax = next(axes_iterator)
+         improvements, margins, d_trials = \
+            count_successul_perturbations(dataset, depth, debug=True)
+         data[(dataset, depth)] = improvements, margins
+         trials += d_trials
 
-         bins = count_successul_perturbations(dataset, depth, debug=True)
-         max_y = max(max_y, max(bins))
+         max_y_imp = max(max_y_imp, max(improvements))
+         max_y_mar = max(max_y_mar, max(margins))
 
-         ax.bar(range(depth), bins)
+   plot_bins(axes[0], data[(Dataset.MNIST, 3)][index], data[(Dataset.FASHION, 3)][index])
+   plot_bins(axes[1], data[(Dataset.MNIST, 6)][index], data[(Dataset.FASHION, 6)][index])
 
-         ax.set_xlabel("Layer")
-         ax.set_ylabel("Total count of improvements")
-         ax.set_title(f"Depth {depth}, {dataset.value}")
-         ax.set_xticks(range(depth))
+   if index == 0: axes[0].legend(loc="upper left")
 
-   max_y = round(1.1*max_y)
-   for ax in axes:
-      ax.set_ylim((0, max_y))
+   axes[0].set_ylabel(YLABELS[index])
+   axes[0].set_xlabel("Layer")
+   axes[1].set_xlabel("Layer")
+
+   axes[0].set_title("Depth 3")
+   axes[1].set_title("Depth 6")
+
+   axes[0].set_xticks(range(3))
+   axes[1].set_xticks(range(6))
+
+   max_y = 1.1*(max_y_imp if index == 0 else max_y_mar)
+   axes[0].set_ylim((0, max_y))
+   axes[1].set_ylim((0, max_y))
+   axes[1].set_yticks(())
+
+   if index == 1:
+      labels = axes[0].get_yticks()
+      axes[0].set_yticklabels([f"{100*l:.0f}%" for l in labels])
+
+   fig.suptitle(TITLES[index])
+
+   output_folder = Path("./fig_wp_layers/")
+   output_folder.mkdir(parents=True, exist_ok=True)
+   letter = "a" if index == 0 else "b"
+   filename = f"wp-layers_@{CONNECTIONS.value}_{PERCENT}percent.{letter}.png"
+   plt.tight_layout()
+   plt.savefig(output_folder / filename)
+   plt.show()
+
+def main():
+   fig, axes = plt.subplots(2,2,gridspec_kw={"width_ratios": [1,1.618]})
+   fig.set_size_inches(16,10)
+
+   max_y_imp = 0
+   max_y_mar = 0
+   data = {}
+   trials = 0
+
+   for dataset in (Dataset.MNIST, Dataset.FASHION):
+      for depth in (3, 6):
+         improvements, margins, d_trials = \
+            count_successul_perturbations(dataset, depth, debug=True)
+         data[(dataset, depth)] = improvements, margins
+         trials += d_trials
+
+         max_y_imp = max(max_y_imp, max(improvements))
+         max_y_mar = max(max_y_mar, max(margins))
+
+   plot_bins(axes[0,0], data[(Dataset.MNIST, 3)][0], data[(Dataset.FASHION, 3)][0])
+   plot_bins(axes[0,1], data[(Dataset.MNIST, 6)][0], data[(Dataset.FASHION, 6)][0])
+   plot_bins(axes[1,0], data[(Dataset.MNIST, 3)][1], data[(Dataset.FASHION, 3)][1])
+   plot_bins(axes[1,1], data[(Dataset.MNIST, 6)][1], data[(Dataset.FASHION, 6)][1])
+
+   axes[0,0].legend(loc="upper left")
+
+   axes[0,0].set_ylabel("Total count of improvements")
+   axes[1,0].set_ylabel("Total $F_1$ score margin")
+   axes[1,0].set_xlabel("Layer")
+   axes[1,1].set_xlabel("Layer")
+
+   axes[0,0].set_title("Improvements / depth 3")
+   axes[0,1].set_title("Improvements / depth 6")
+   axes[1,0].set_title("Margins / depth 3")
+   axes[1,1].set_title("Margins / depth 6")
+
+   axes[0,0].set_xticks(range(3))
+   axes[1,0].set_xticks(range(3))
+   axes[0,1].set_xticks(range(6))
+   axes[1,1].set_xticks(range(6))
+
+   max_y_imp *= 1.1; max_y_mar *= 1.1
+   axes[0,0].set_ylim((0, max_y_imp))
+   axes[0,1].set_ylim((0, max_y_imp))
+   axes[1,0].set_ylim((0, max_y_mar))
+   axes[1,1].set_ylim((0, max_y_mar))
+
+   axes[0,1].set_yticks(())
+   axes[1,1].set_yticks(())
+   labels = axes[1,0].get_yticks()
+   axes[1,0].set_yticklabels([f"{100*l:.0f}%" for l in labels])
 
    fig.suptitle("Weight perturbation improvements counted across respective layers")
 
@@ -123,7 +227,7 @@ def main():
 
    caption = (
       f"Total improvements in F1 score attributed to the respective layers perturbed. "
-      f"Data shown for MNIST and Fashion-MNIST datasets."
+      f"The results compiled are the unweighted accumulation of {trials} total trials."
    )
 
    lines = [
@@ -142,5 +246,7 @@ def main():
    print("```")
 
 if __name__ == '__main__':
-   _ = main()
+   #_ = main()
+   plot_subfigures(0)
+   plot_subfigures(1)
 

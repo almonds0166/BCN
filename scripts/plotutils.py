@@ -1,10 +1,13 @@
 
+from pathlib import Path
+
 import torch
 import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib.colors as mcolors
 
 from bcn import BCN
+import bcn.branches
 
 # figure settings
 FONT_SIZE = 14
@@ -16,8 +19,98 @@ HIGH_CONTRAST = (
    "#DDAA33", # yellow
 )
 
+MNIST_COLOR = "#BDD9BF"
+FASHION_COLOR = "#A997DF"
+
 BAR_EPS = 0.15
 ALPHA = 0.2
+
+BRANCH_NAMES = {
+   "DirectOnly": "Direct connections only",
+   "informed.Kappa(1.0)": "Intermediate branches configuration a",
+   "informed.Kappa(1.5)": "Intermediate branches configuration b",
+   "informed.IndirectOnly": "Extinguished direct connections",
+   "uniform.NearestNeighborOnly": "First ring only",
+   "uniform.NextToNNOnly": "Second ring only",
+   "uniform.NearestNeighbor": "Nearest neighbors connections",
+   "uniform.NextToNN": "Next-to-nearest neighbors connections",
+}
+
+ABBREVIATIONS = {
+   "DirectOnly": "Dir",
+   "informed.Kappa(1.0)": "BCa",
+   "informed.Kappa(1.5)": "BCb",
+   "informed.IndirectOnly": "Ext",
+   "uniform.NearestNeighborOnly": "FRO",
+   "uniform.NextToNNOnly": "SRO",
+   "uniform.NearestNeighbor": "N9",
+   "uniform.NextToNN": "N25",
+}
+
+# deprecated
+ABBREVIATIONS_SAFE = {
+   "DirectOnly": "DIR",
+   "informed.Kappa(1.0)": "k(1.0)",
+   "informed.Kappa(1.5)": "k(1.5)",
+   "informed.IndirectOnly": "k(2.4)",
+   "uniform.NearestNeighborOnly": "FRO",
+   "uniform.NextToNNOnly": "SRO",
+   "uniform.NearestNeighbor": "N9",
+   "uniform.NextToNN": "N25",
+}
+
+BRANCHES = {
+   "DirectOnly": bcn.branches.DirectOnly(),
+   "informed.Kappa(1.0)": bcn.branches.informed.Kappa(1.0),
+   "informed.Kappa(1.5)": bcn.branches.informed.Kappa(1.5),
+   "informed.IndirectOnly": bcn.branches.informed.IndirectOnly(),
+   "uniform.NearestNeighborOnly": bcn.branches.uniform.NearestNeighborOnly(),
+   "uniform.NextToNNOnly": bcn.branches.uniform.NextToNNOnly(),
+   "uniform.NearestNeighbor": bcn.branches.uniform.NearestNeighbor(),
+   "uniform.NextToNN": bcn.branches.uniform.NextToNN(),
+}
+
+class Colors:
+   BLUE = tuple(i/255 for i in (68,119,170))
+   RED = tuple(i/255 for i in (204,102,119))
+   YELLOW = tuple(i/255 for i in (221,204,119))
+   GRAY = tuple(i/255 for i in (130,130,130))
+
+def cmap_from_color(positive_color, negative_color=None,
+   *, N=100, name="mycmap"):
+   """Linear colormap from given color
+
+   Args:
+      color (tuple[float,float,float]): The color as a tuple of floats in ``0..1``
+
+   Keyword args:
+      N (int): The number of colormap quantization levels, default 10.
+      name (str): The (internal) name of the cmap. Default "mycmap".
+   """
+   positive = [(*positive_color, c) for c in np.linspace(0,1,N)]
+   if negative_color is None:
+      return mcolors.LinearSegmentedColormap.from_list(name, positive, N=N)
+   
+   negative = [(*negative_color, c) for c in np.linspace(1,0,N)]
+   _ = negative + positive
+   return mcolors.LinearSegmentedColormap.from_list(name, _, N=N)
+
+class Cmaps:
+   BLUE = cmap_from_color(Colors.BLUE, name="myblue")
+   RED = cmap_from_color(Colors.RED, name="myred")
+   YELLOW = cmap_from_color(Colors.YELLOW, name="myyellow")
+   GRAY = cmap_from_color(Colors.GRAY, name="mygray")
+   BLUE_TO_RED = cmap_from_color(Colors.RED, Colors.BLUE, name="myBuRd")
+   RED_TO_BLUE = cmap_from_color(Colors.BLUE, Colors.RED, name="myRdBu")
+
+def save_fig(plt, folder, filename, show=False):
+   """Given a matplotlib plot and location, save the figure
+   """
+   output_folder = Path(folder)
+   output_folder.mkdir(parents=True, exist_ok=True)
+   plt.savefig(output_folder / filename)
+   
+   if show: plt.show()
 
 def plot_loss(results, title: str,
    height_inches: float=10, width_inches: float=10,
@@ -306,12 +399,14 @@ def keypad_connectedness(model):
 
    return kc
 
-def plot_fault(fault, save_file=None, model=None):
+def plot_fault(fault, save_file=None, model=None, show=False):
    """Plots a fault mask.
 
    Args:
+      fault: The Fault instance to visualize.
       save_file: Where to save the plot to.
       model: The model to use to color the connectedness of the keypad.
+      show: Whether to show the plot or just return it.
    """
    if model:
       kc = keypad_connectedness(model)
@@ -323,7 +418,7 @@ def plot_fault(fault, save_file=None, model=None):
       ax = axes[i]
       if model:
          colors = [(0,.53,.74,c) for c in np.linspace(0,1,100)]
-         cmapblue = mcolors.LinearSegmentedColormap.from_list("mycmap", colors, N=5)
+         cmapblue = mcolors.LinearSegmentedColormap.from_list("mycmap", colors, N=10)
          im = ax.imshow(kc[i], cmap=cmapblue, vmin=0, vmax=10)
       cmap = mcolors.ListedColormap([(.77,.01,.20,.6), (0,0,0,0)])
       ax.imshow(mask.reshape((w,w)), cmap=cmap)
@@ -340,8 +435,10 @@ def plot_fault(fault, save_file=None, model=None):
 
    if save_file:
       plt.savefig(save_file)
-   else:
-      return plt.show()
+   
+   if show: return plt.show()
+
+   return plt
 
 if __name__ == "__main__":
    from bcn import Fault

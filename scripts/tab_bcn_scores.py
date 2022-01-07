@@ -16,21 +16,12 @@ import re
 
 from bcn import Results, Dataset, Connections
 
+from plotutils import ABBREVIATIONS
+
 RESULTS_PATH = Path(input("Enter the location of all your results\n> "))
 
-DATASET = Dataset.MNIST
-CONNECTIONS = Connections.ONE_TO_9
-
-BRANCH_NAMES = {
-   "DirectOnly": "Direct connections only",
-   "informed.Kappa(1.0)": "Grating strength 1.0",
-   "informed.Kappa(1.5)": "Grating strength 1.5",
-   "informed.IndirectOnly": "Grating strength 2.4048",
-   "uniform.NearestNeighborOnly": "First ring only",
-   "uniform.NextToNNOnly": "Second ring only",
-   "uniform.NearestNeighbor": "Uniform nearest neighbor",
-   "uniform.NextToNN": "Uniform next-to-nearest neighbor",
-}
+DATASET = Dataset.FASHION
+CONNECTIONS = Connections.ONE_TO_25
 
 def mean(ell, default=None):
    return sum(ell) / len(ell) if ell else default
@@ -95,7 +86,7 @@ def main():
    for w in (16, 30):
       h = w
       for d in (3, 6):
-         for b in BRANCH_NAMES.keys(): # dict keys are ordered starting in ~3.7
+         for b in ABBREVIATIONS.keys(): # dict keys are ordered starting in ~3.7
             bucket = (h, w, d, b)
 
             trials = min(trials, len(data[bucket]))
@@ -105,7 +96,7 @@ def main():
             f1 = mean(data[bucket]["f1"])
 
             lines.append((
-               f"{h}x{w}x{d} & {BRANCH_NAMES[b]} & "
+               f"{h}x{w}x{d} & {ABBREVIATIONS[b]} & "
                f"{vl:.3f} & {100*ac:.1f}\\% & {100*f1:.1f}\\% \\\\"
             ))
          lines.append("\\hline")

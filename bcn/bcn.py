@@ -164,7 +164,6 @@ class TrainingScheme:
 
       return train, valid
 
-# @dataclass isn't really helpful here, actually
 class Results:
    """Class representing BCN training results.
 
@@ -328,7 +327,8 @@ class BCNLayer(nn.Module):
       activation: The activation function to use between layers. Default is sigmoid.
       last: Whether the layer is the final layer in the model or not, default False. If True, the
          forward output is a (10, -1) tensor representing the raw, unnormalized scores of the
-         ten-digit "keypad" (refer to thesis, Section _._._) ready for cross entropy loss.
+         ten-digit "keypad" (refer to thesis, Figure 3-3 and associated text) ready for cross
+         entropy loss.
 
    Attributes:
       width (int): The side length of the layer.
@@ -345,7 +345,8 @@ class BCNLayer(nn.Module):
       activation: The activation function used between layers.
       last (bool): Whether the layer is the final layer in the model or not. If ``True``, the
          forward output is a (10, -1) tensor representing the raw, unnormalized scores of the
-         ten-digit "keypad" (refer to thesis, Section _._._) ready for cross entropy loss.
+         ten-digit "keypad" (refer to thesis, Figure 3-3 and associated text) ready for cross
+         entropy loss.
       ells (range): A range of offsets, centered around 0, used for the direct connections. For
          example, 1-to-25 connections will range from -2 to +2 inclusive, because this represents
          a span of width 5.
@@ -740,7 +741,7 @@ class BCN(nn.Module):
          batch = torch.transpose(batch, 0, 1).to(self.device)
          labels = labels.to(self.device)
          self.optim.zero_grad()
-         predictions = torch.roll(self(batch, fault=fault), -1, 1) # keypad fix, see Section _._._
+         predictions = torch.roll(self(batch, fault=fault), -1, 1) # keypad fix, see Chapter 3
          loss = self.loss_fn(predictions, labels)
          train_loss += loss.item()
          if i % 10 == 0: pbar.set_postfix(loss=f"{loss.item():.2f}")
@@ -907,7 +908,7 @@ class BCN(nn.Module):
    ) -> Dict[Tuple[int,int],torch.Tensor]:
       """Construct the connection matrices that determine how to pass one layer to the next.
 
-      See thesis Section ``_._._`` for more details about how this works.
+      See thesis Chapter 3 for more details about how this works.
 
       Args:
          width: The width of each BCN plane, e.g. 28.

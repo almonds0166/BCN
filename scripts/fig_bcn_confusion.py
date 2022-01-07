@@ -16,6 +16,7 @@ import sys; sys.path.append("../")
 from pathlib import Path
 import re
 
+import torch
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -25,19 +26,21 @@ from bcn.branches import DirectOnly
 from bcn.branches.uniform import NearestNeighbor, NearestNeighborOnly, NextToNN, NextToNNOnly
 from bcn.branches.informed import Kappa, IndirectOnly
 
+from plotutils import ABBREVIATIONS
+
 RESULTS_PATH = Path(input("Enter the location of all your results\n> "))
 
 # choose model
-DATASET = Dataset.MNIST
+DATASET = Dataset.FASHION
 CONNECTIONS = Connections.ONE_TO_9
 BATCH_SIZE = 64
-W = 16
+W = 30
 H = W
 D = 3
 
 TRIAL = None # ``None`` for all trials
 
-FONT_SIZE = 14
+FONT_SIZE = 24
 plt.rcParams.update({'font.size': FONT_SIZE})
 
 BRANCHES = {
@@ -49,17 +52,6 @@ BRANCHES = {
    "uniform.NextToNNOnly": NextToNNOnly(),
    "uniform.NearestNeighbor": NearestNeighbor(),
    "uniform.NextToNN": NextToNN(),
-}
-
-BRANCH_NAMES = {
-   "DirectOnly": "Direct connections only",
-   "informed.Kappa(1.0)": "Grating strength 1.0",
-   "informed.Kappa(1.5)": "Grating strength 1.5",
-   "informed.IndirectOnly": "Grating strength 2.4048",
-   "uniform.NearestNeighborOnly": "First ring only",
-   "uniform.NextToNNOnly": "Second ring only",
-   "uniform.NearestNeighbor": "Uniform nearest neighbor",
-   "uniform.NextToNN": "Uniform next-to-nearest neighbor",
 }
 
 FASHION_CLASSES = [
@@ -125,6 +117,13 @@ def main():
          model.confusion()
       )
 
+   vmax = 0
+   for bucket in data.values():
+      for confusion in bucket:
+         vmax = max(vmax, torch.max(confusion))
+
+   #print("vmax is", vmax)
+
    trials = float("inf") # minimum number of trials encountered
 
    # set up figure
@@ -138,8 +137,8 @@ def main():
       confusion = mean(data[bucket])
 
       ax = axes[i]
-      ax.imshow(confusion)
-      ax.set_title(BRANCH_NAMES[b])
+      last_im = ax.imshow(confusion, vmin=0, vmax=vmax)
+      ax.set_title(ABBREVIATIONS[b])
       ax.set_yticks(())
       ax.set_xticks(())
 
@@ -152,9 +151,20 @@ def main():
          ax.set_xlabel("Predicted class")
          ax.set_xticks(range(10))
          if DATASET == Dataset.FASHION:
-            ax.set_xticklabels(FASHION_CLASSES, rotation=70)
+            ax.set_xticklabels(FASHION_CLASSES, rotation=80, fontdict={'fontsize': 20})
          else:
             ax.set_xticklabels(range(10))
+
+   # more room for Fashion
+   if DATASET == Dataset.FASHION:
+      fig.subplots_adjust(bottom=0.25)
+
+   # add colorbar
+   fig.subplots_adjust(right=0.85)
+   cbar_ax = fig.add_axes([0.89, 0.15, 0.02, 0.6])
+   lower = 0
+   upper = 100 * round(vmax.item()/100)
+   cbar = fig.colorbar(last_im, cax=cbar_ax, ticks=np.arange(lower, upper, 100))
 
    # tidy up whole plot
    fig.suptitle((
@@ -164,6 +174,7 @@ def main():
    output_folder = Path("./fig_bcn_confusion/")
    output_folder.mkdir(parents=True, exist_ok=True)
    filename = f"bcn-confusion_{H}x{W}x{D}_{DATASET.name.lower()}@{CONNECTIONS.value}.png"
+   #plt.tight_layout()
    plt.savefig(output_folder / filename)
    #plt.show()
 

@@ -23,9 +23,16 @@ There are two main ways to query version information about this project, `bcn.__
 
 .. data:: __version__
 
-   A string representation of the version. e.g. ``"1.1.23"``.
+   A string representation of the version. e.g. ``"1.2.345"``.
 
 .. _whats_new:
+
+v1.2.1180 (Jan 07, 2022)
+------------------------
+
+- Submitted thesis!
+- Update docs to reflect thesis
+- GUI works without crashing
 
 v1.1.166 (Sep 30, 2021)
 -----------------------

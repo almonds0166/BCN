@@ -24,26 +24,17 @@ import re
 
 from bcn import Results, Dataset, Connections
 
+from plotutils import ABBREVIATIONS
+
 RESULTS_PATH = Path(input("Enter the location of your *BCN* results\n> "))
 WP_PATH = Path(input("Enter the location of your *WP* results\n> "))
 
-DATASET = Dataset.MNIST
+DATASET = Dataset.FASHION
 CONNECTIONS = Connections.ONE_TO_9
-PERCENT = 2
+PERCENT = 10
 
 # get subfolder with only the desired results
 WP_PATH /= f"{PERCENT}percent"
-
-BRANCH_NAMES = {
-   "DirectOnly": "Direct connections only",
-   "informed.Kappa(1.0)": "Grating strength 1.0",
-   "informed.Kappa(1.5)": "Grating strength 1.5",
-   "informed.IndirectOnly": "Grating strength 2.4048",
-   "uniform.NearestNeighborOnly": "First ring only",
-   "uniform.NextToNNOnly": "Second ring only",
-   "uniform.NearestNeighbor": "Uniform nearest neighbor",
-   "uniform.NextToNN": "Uniform next-to-nearest neighbor",
-}
 
 def mean(ell, default=None):
    return sum(ell) / len(ell) if ell else default
@@ -137,18 +128,19 @@ def main():
       "% Generated with ``scripts/tab_bcn_fault.py``",
       "\\begin{table}",
       "\\centering",
-      "\\begin{tabular}{ " + ("c " * 5) + "}",
+      "\\begin{tabular}{ " + ("c " * 6) + "}",
       "\\hline",
       (
          "\\multicolumn{2}{ c }{Model} & "
-         "\\multicolumn{3}{ c }{F1 score} \\\\"
+         "\\multicolumn{4}{ c }{F1 score} \\\\"
       ),
       "\\hline",
       (
          "Shape & Branches & "
          "Before fault & "
          "After fault & "
-         "Abs. diff. \\\\"
+         "Abs. diff. & "
+         "Rel. diff. \\\\"
       ),
       "\\hline",
    ]
@@ -159,8 +151,11 @@ def main():
    for w in (16, 30):
       h = w
       for d in (3, 6):
-         for b in BRANCH_NAMES.keys(): # dict keys are ordered starting in ~3.7
+         for b in ABBREVIATIONS.keys(): # dict keys are ordered starting in ~3.7
             bucket = (h, w, d, b)
+
+            if not bucket in before_data: continue
+            if not bucket in after_data: continue
 
             trials = min(trials, len(before_data[bucket]), len(after_data[bucket]))
 
@@ -172,22 +167,29 @@ def main():
             after_ac = mean(after_data[bucket]["ac"])
             after_f1 = mean(after_data[bucket]["f1"])
 
-            diff_vl = after_vl - before_vl
-            diff_ac = after_ac - before_ac
-            diff_f1 = after_f1 - before_f1
+            abs_diff_vl = after_vl - before_vl
+            abs_diff_ac = after_ac - before_ac
+            abs_diff_f1 = after_f1 - before_f1
+
+            rel_diff_vl = abs_diff_vl / before_vl
+            rel_diff_ac = abs_diff_ac / before_ac
+            rel_diff_f1 = abs_diff_f1 / before_f1
 
             lines.append((
                f"{h}x{w}x{d} & "
-               f"{BRANCH_NAMES[b]} & "
+               f"{ABBREVIATIONS[b]} & "
                #f"{before_vl:.3f} & "
                #f"{100*before_ac:.1f}\\% & "
                f"{100*before_f1:.1f}\\% & "
                #f"{after_vl:.3f} & "
                #f"{100*after_ac:.1f}\\% & "
                f"{100*after_f1:.1f}\\% & "
-               #f"{diff_vl:+.3f} & "
-               #f"{100*diff_ac:+.1f}\\% & "
-               f"{100*diff_f1:+.1f}\\% \\\\"
+               #f"{abs_diff_vl:+.3f} & "
+               #f"{100*abs_diff_ac:+.1f}\\% & "
+               f"{100*abs_diff_f1:+.1f}\\% & "
+               #f"{rel_diff_vl:+.2f} & "
+               #f"{rel_diff_ac:+.2f} & "
+               f"{rel_diff_f1:+.2f} \\\\"
             ))
          lines.append("\\hline")
 
@@ -198,7 +200,8 @@ def main():
          f"\\caption{{Drop in performance with {PERCENT}\\% applied fault for {DATASET.value} "
          f"at 1-to-{CONNECTIONS.value} connections (average of {trials} trials).}}"
       ),
-      f"\\label{{table:ch3:fault_{DATASET.name.lower()}@{CONNECTIONS.value}}}",
+      f"\\label{{table:ch3:fault_{DATASET.name.lower()}"
+      f"@{CONNECTIONS.value}_{PERCENT}percent}}",
       "\\end{table}",
    ])
 

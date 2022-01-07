@@ -12,7 +12,8 @@ results/
 networks/
 
 # figures
-scripts/*/*.png
+scripts/*
+!scripts/*.py
 
 # virtual environment
 venv/
